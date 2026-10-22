@@ -13,7 +13,13 @@ export const RATE_LIMITS = {
   refresh: { windowMs: 60_000, max: (env: Env) => env.REFRESH_RATE_LIMIT_MAX },
   register: { windowMs: 60 * 60_000, max: (env: Env) => env.REGISTER_RATE_LIMIT_MAX },
   // Per-IP limits for the recovery endpoints (per hour) and the MFA endpoints (per minute)
-  recovery: { windowMs: 60 * 60_000, max: (env: Env) => env.RECOVERY_RATE_LIMIT_MAX },
+  "forgot-password": { windowMs: 60 * 60_000, max: (env: Env) => env.RECOVERY_RATE_LIMIT_MAX },
+  "reset-password": { windowMs: 60 * 60_000, max: (env: Env) => env.RECOVERY_RATE_LIMIT_MAX * 2 },
+  "resend-verification": {
+    windowMs: 60 * 60_000,
+    max: (env: Env) => env.RECOVERY_RATE_LIMIT_MAX,
+  },
+  "verify-email": { windowMs: 60 * 60_000, max: (env: Env) => env.RECOVERY_RATE_LIMIT_MAX * 3 },
   mfa: { windowMs: 60_000, max: (env: Env) => env.MFA_RATE_LIMIT_MAX },
 } as const;
 

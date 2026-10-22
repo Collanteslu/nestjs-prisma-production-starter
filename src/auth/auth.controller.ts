@@ -35,6 +35,7 @@ import { PrismaService } from "../database/prisma.service";
 import { AccountMailService } from "../mail/account-mail.service";
 import { RateLimit } from "../rate-limit/rate-limit.decorator";
 import { LoginLockoutService } from "../rate-limit/login-lockout.service";
+import { MfaService } from "../mfa/mfa.service";
 import { SessionsService } from "../sessions/sessions.service";
 import type { RefreshTokenPayload } from "./auth.types";
 import {
@@ -53,6 +54,7 @@ export class AuthController {
     private readonly sessions: SessionsService,
     private readonly tokens: TokensService,
     private readonly lockout: LoginLockoutService,
+    private readonly mfa: MfaService,
     private readonly audit: AuditService,
     private readonly accountMail: AccountMailService,
     @Inject(APP_ENV) private readonly env: Env,
@@ -129,7 +131,7 @@ export class AuthController {
   })
   @ApiTooManyRequestsResponse({ description: "Rate limit excedido o cuenta bloqueada temporalmente" })
   async login(@Body() dto: LoginRequest, @Req() req: Request) {
-    const { email, password } = dto;
+    const { email, password, totpCode, recoveryCode } = dto;
 
     const lockedForSeconds = await this.lockout.retryAfterSeconds(email);
     if (lockedForSeconds > 0) {
@@ -177,8 +179,29 @@ export class AuthController {
       );
     }
 
-    // NOTE(Fase E): second factor branch (totpCode/recoveryCode) is wired with the MFA module.
-    // No user can carry `totpEnabledAt` until that module exists, so parity holds meanwhile.
+    // Second factor: the password alone is not enough once 2FA is on. A wrong code counts as a
+    // failed login (same lockout), a missing one does not.
+    if (user.totpEnabledAt) {
+      if (!totpCode && !recoveryCode) {
+        throw new HttpException(
+          { message: "Two-factor code required.", details: { code: "MFA_REQUIRED" } },
+          401,
+        );
+      }
+      if (!(await this.mfa.verifySecondFactor(user, { code: totpCode, recoveryCode }))) {
+        await this.lockout.recordFailure(email);
+        await this.audit.record(req, {
+          userId: user.id,
+          action: "LOGIN_FAILED",
+          entity: "Session",
+          details: { email, reason: "invalid_second_factor" },
+        });
+        throw new HttpException(
+          { message: "Invalid two-factor code.", details: { code: "MFA_INVALID" } },
+          401,
+        );
+      }
+    }
 
     await this.lockout.reset(email);
 

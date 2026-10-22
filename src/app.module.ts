@@ -20,6 +20,10 @@ import { RateLimitGuard } from "./rate-limit/rate-limit.guard";
 import { RateLimitModule } from "./rate-limit/rate-limit.module";
 import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 import { AuthModule } from "./auth/auth.module";
+import { CleanupService } from "./jobs/cleanup.service";
+import { MfaModule } from "./mfa/mfa.module";
+import { MfaRoutesModule } from "./mfa/mfa.routes.module";
+import { RecoveryModule } from "./recovery/recovery.module";
 import { SessionsModule } from "./sessions/sessions.module";
 import { TasksModule } from "./tasks/tasks.module";
 import { UsersModule } from "./users/users.module";
@@ -48,13 +52,17 @@ export class AppModule {
         RateLimitModule,
         AuditModule,
         MailModule,
+        MfaModule, // TOTP/recovery-code services: global, always present (login may need them)
         TasksModule, // public/ownerless with AUTH_MODE=none, bearer-protected otherwise
         // The auth stack (and its routes) exists exactly when the reference mounts it
         ...(features.auth ? [SessionsModule, AuthModule, UsersModule, AuditLogsModule] : []),
+        // Account security (recovery emails + MFA management) is AUTH_MODE=full only
+        ...(features.accountSecurity ? [RecoveryModule, MfaRoutesModule] : []),
       ],
       controllers: [HealthController, SystemController, SpikeController],
       providers: [
         SeedService,
+        CleanupService,
         { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: APP_GUARD, useClass: RateLimitGuard },
         { provide: APP_PIPE, useClass: ContractValidationPipe },

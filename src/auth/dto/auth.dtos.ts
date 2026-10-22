@@ -3,9 +3,6 @@ import {
   forgotPasswordSchema,
   loginSchema,
   logoutSchema,
-  mfaDisableSchema,
-  mfaEnableSchema,
-  mfaSetupSchema,
   registerSchema,
   resendVerificationSchema,
   resetPasswordSchema,
@@ -25,6 +22,3 @@ export class ForgotPasswordRequest extends createZodDto(forgotPasswordSchema) {}
 export class ResetPasswordRequest extends createZodDto(resetPasswordSchema) {}
 export class VerifyEmailRequest extends createZodDto(verifyEmailSchema) {}
 export class ResendVerificationRequest extends createZodDto(resendVerificationSchema) {}
-export class MfaSetupRequest extends createZodDto(mfaSetupSchema) {}
-export class MfaEnableRequest extends createZodDto(mfaEnableSchema) {}
-export class MfaDisableRequest extends createZodDto(mfaDisableSchema) {}
