@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+*.log
+*.tsbuildinfo
+.husky/_
+.env
+.env.*
+!.env.example
+dev.db*
+*.db
+*.db-shm
+*.db-wal

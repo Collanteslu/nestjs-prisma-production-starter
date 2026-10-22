@@ -1,0 +1,84 @@
+{
+  "name": "nestjs-prisma-production-starter",
+  "version": "2.0.0",
+  "description": "Plantilla profesional para APIs REST con NestJS 12, Prisma 7 (SQLite), Zod, JWT + sesiones stateful, MFA, OpenAPI/Scalar — paridad demostrada con hono-prisma-production-starter",
+  "license": "MIT",
+  "author": "Collanteslu",
+  "engines": {
+    "node": ">=24.9.0",
+    "npm": ">=11.0.0"
+  },
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "start:prod": "node dist/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --experimental-vm-modules --disable-warning=ExperimentalWarning ./node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules --disable-warning=ExperimentalWarning ./node_modules/jest/bin/jest.js --watch",
+    "test:cov": "node --experimental-vm-modules --disable-warning=ExperimentalWarning ./node_modules/jest/bin/jest.js --coverage",
+    "test:e2e": "bash test-api.sh",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "prepare": "husky",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "contract": "node contract/run.mjs"
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs,cjs,json,md}": [
+      "prettier --write"
+    ],
+    "*.ts": [
+      "eslint"
+    ]
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "@nestjs/common": "^12.2.0",
+    "@nestjs/config": "^12.0.1",
+    "@nestjs/core": "^12.2.0",
+    "@nestjs/jwt": "^12.0.3",
+    "@nestjs/platform-express": "^12.2.0",
+    "@nestjs/schedule": "^12.0.2",
+    "@nestjs/swagger": "^12.0.3",
+    "@prisma/adapter-libsql": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "@scalar/nestjs-api-reference": "^1.2.30",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^18.0.9",
+    "helmet": "^8.3.0",
+    "nestjs-pino": "^5.3.1",
+    "nestjs-zod": "^5.5.0",
+    "nodemailer": "^10.2.1",
+    "pino": "^10.4.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^13.1.0",
+    "@eslint/js": "^10.0.1",
+    "@nestjs/cli": "^12.0.10",
+    "@nestjs/testing": "^12.2.0",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.19.2",
+    "@types/nodemailer": "^8.0.2",
+    "@types/supertest": "^7.2.1",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "jest": "^30.5.2",
+    "lint-staged": "^17.6.0",
+    "pino-pretty": "^13.2.0",
+    "prettier": "^3.9.10",
+    "prisma": "^7.10.1",
+    "supertest": "^7.3.1",
+    "ts-jest": "^29.4.15",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.0"
+  }
+}
