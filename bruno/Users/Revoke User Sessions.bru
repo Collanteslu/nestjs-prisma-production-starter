@@ -1,0 +1,15 @@
+meta {
+  name: Revoke User Sessions
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/users/user-2/revoke-sessions
+  body: none
+  auth: none
+}
+
+docs {
+  Cierra todas las sesiones de un usuario. Lo puede hacer el propio usuario o un administrador.
+}

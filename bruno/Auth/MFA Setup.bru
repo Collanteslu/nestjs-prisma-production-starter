@@ -1,0 +1,25 @@
+meta {
+  name: MFA Setup
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/auth/mfa/setup
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "currentPassword": "password123"
+  }
+}
+
+docs {
+  Empieza el alta de 2FA: devuelve el secreto y la URI otpauth:// (muéstrala como QR). Requiere Login User previo.
+}

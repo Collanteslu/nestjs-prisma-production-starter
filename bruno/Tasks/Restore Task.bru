@@ -1,0 +1,16 @@
+meta {
+  name: Restore Task
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/tasks/task-1/restore
+  body: none
+  auth: none
+}
+
+docs {
+  Restaura una tarea eliminada con soft delete (ejecuta antes "Delete Task" sin ?permanent).
+  Devuelve 409 si la tarea no está eliminada.
+}

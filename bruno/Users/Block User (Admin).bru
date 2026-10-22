@@ -1,0 +1,27 @@
+meta {
+  name: Block User (Admin)
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/api/users/user-2/block
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "isBlocked": true,
+    "reason": "Violación de términos de servicio"
+  }
+}
+
+docs {
+  Solo administradores. Suspende a Ana (user-2) y revoca todas sus sesiones al instante.
+  Un administrador no puede suspenderse a sí mismo.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Update User
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/users/user-2
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Ana García Actualizada"
+  }
+}
+
+docs {
+  Admin o el propio usuario. Cambiar la propia contraseña exige `currentPassword` (un admin que restablece la de otro usuario no la necesita) y cierra el resto de sesiones de la cuenta en la misma transacción.
+}

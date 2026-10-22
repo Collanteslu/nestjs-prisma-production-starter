@@ -1,0 +1,58 @@
+name: CI & Typecheck
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+# Read-only token for the workflow; cancel superseded runs of the same branch/PR
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Clonar repositorio
+        uses: actions/checkout@v4
+
+      # engines.node >=24.9 (ver package.json)
+      - name: ⚙️ Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: 📦 Instalar dependencias
+        run: npm ci
+
+      - name: 🛠️ Generar Prisma Client
+        run: npx prisma generate
+
+      - name: 🛡️ Auditoría de dependencias de producción
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: 🗄️ Verificar que las migraciones coinciden con el schema
+        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
+
+      - name: 🔎 Verificación de tipos
+        run: npm run typecheck
+
+      - name: 🏗️ Compilación (Build)
+        run: npm run build
+
+      - name: ⚡ Linting & Formatting Check (ESLint)
+        run: npm run lint
+
+      - name: 🐳 Construir la imagen Docker
+        run: docker build -t nestjs-api:ci .
+
+      # Los tests crean y migran su propia base de datos SQLite temporal
+      # (test/setup-env.ts + el beforeAll de test/app.spec.ts), así que dev.db no se toca
+      - name: 🧪 Ejecutar Tests Automatizados con cobertura (Jest)
+        run: npm run test:cov

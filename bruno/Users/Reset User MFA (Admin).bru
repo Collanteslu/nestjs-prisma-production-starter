@@ -1,0 +1,15 @@
+meta {
+  name: Reset User MFA (Admin)
+  type: http
+  seq: 10
+}
+
+delete {
+  url: {{baseUrl}}/api/users/user-2/mfa
+  body: none
+  auth: none
+}
+
+docs {
+  Solo administradores. Quita el 2FA de un usuario que perdió su dispositivo y cierra todas sus sesiones.
+}

@@ -1,0 +1,20 @@
+meta {
+  name: Delete Task
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/tasks/task-1
+  body: none
+  auth: none
+}
+
+params:query {
+  ~permanent: true
+}
+
+docs {
+  Soft delete por defecto (se puede recuperar con "Restore Task").
+  Activa el parámetro ?permanent=true para el borrado físico. task-1 pertenece al administrador.
+}

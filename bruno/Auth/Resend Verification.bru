@@ -1,0 +1,25 @@
+meta {
+  name: Resend Verification
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/auth/resend-verification
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "ana@example.com"
+  }
+}
+
+docs {
+  Reenvía el correo de verificación. Responde 202 siempre (exista o no la cuenta, o ya esté verificada); máximo 3 correos por dirección y hora. En desarrollo (MAIL_TRANSPORT=log) el enlace con el token sale en el log del servidor. Las cuentas demo ya están verificadas, así que con ellas no se envía nada.
+}

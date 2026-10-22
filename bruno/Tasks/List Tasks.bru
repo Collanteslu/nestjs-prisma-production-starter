@@ -1,0 +1,26 @@
+meta {
+  name: List Tasks
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/tasks?page=1&limit=10&order=desc
+  body: none
+  auth: none
+}
+
+params:query {
+  page: 1
+  limit: 10
+  order: desc
+  ~search: interfaz
+  ~completed: false
+  ~includeDeleted: true
+  ~sort: -createdAt,title
+  ~filter[completed]: true
+  ~include: user
+  ~scope: all
+  ~userId: user-2
+}
+

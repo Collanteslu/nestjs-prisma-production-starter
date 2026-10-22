@@ -1,0 +1,23 @@
+meta {
+  name: Create Task
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/tasks
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "title": "Aprender Bruno y NestJS",
+    "description": "Tarea asignada automaticamente al usuario del token",
+    "completed": false
+  }
+}

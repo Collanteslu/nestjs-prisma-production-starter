@@ -12,3 +12,4 @@ dev.db*
 *.db-shm
 *.db-wal
 src/generated/
+.DS_Store

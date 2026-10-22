@@ -1,0 +1,29 @@
+meta {
+  name: Create User
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/users
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Nuevo Usuario",
+    "email": "nuevo@example.com",
+    "password": "password123",
+    "role": "user"
+  }
+}
+
+docs {
+  Solo administradores: ejecuta antes "Login Admin". El registro público es Auth/Register.
+  Contraseña: 8-72 caracteres.
+}

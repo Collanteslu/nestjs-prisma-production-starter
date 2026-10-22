@@ -1,0 +1,20 @@
+meta {
+  name: Delete User
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/users/user-2
+  body: none
+  auth: none
+}
+
+params:query {
+  ~permanent: true
+}
+
+docs {
+  Soft delete por defecto (revoca todas las sesiones); una cuenta eliminada no puede reactivarse.
+  ?permanent=true borra físicamente en cascada. El último administrador activo no puede eliminarse.
+}

@@ -1,0 +1,26 @@
+meta {
+  name: Logout
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/auth/logout
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "refreshToken": "{{refreshToken}}"
+  }
+}
+
+docs {
+  Revoca la sesión asociada al refreshToken (y al Bearer token, si es válido).
+  Después de esta petición hay que volver a iniciar sesión.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: MFA Enable
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/auth/mfa/enable
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "code": "123456"
+  }
+}
+
+docs {
+  Confirma con el primer código de tu app. Devuelve 10 códigos de recuperación, una sola vez.
+}

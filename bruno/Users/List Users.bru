@@ -1,0 +1,27 @@
+meta {
+  name: List Users
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/users?page=1&limit=10&order=desc
+  body: none
+  auth: none
+}
+
+params:query {
+  page: 1
+  limit: 10
+  order: desc
+  ~search: ana
+  ~role: user
+  ~includeDeleted: true
+  ~sort: -createdAt,name
+  ~filter[role]: user
+  ~include: tasks,sessions
+}
+
+docs {
+  Solo administradores. Los filtros filter[campo] están tipados: valores inválidos devuelven 400.
+}

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+test/
+contract/
+coverage/
+.git/
+.env
+dev.db*
+*.db
+*.db-wal
+*.db-shm
+*.log
+.DS_Store
+bruno/
+test-api.sh
+.env.*

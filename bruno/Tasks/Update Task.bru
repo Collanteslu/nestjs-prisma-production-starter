@@ -1,0 +1,26 @@
+meta {
+  name: Update Task
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/tasks/task-1
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "completed": true,
+    "description": "Tarea completada mediante coleccion de Bruno"
+  }
+}
+
+docs {
+  task-1 pertenece al administrador (seeder): usa "Login Admin".
+}

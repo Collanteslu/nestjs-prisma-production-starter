@@ -1,0 +1,16 @@
+meta {
+  name: Revoke Session
+  type: http
+  seq: 2
+}
+
+delete {
+  url: {{baseUrl}}/api/sessions/{{sessionId}}
+  body: none
+  auth: none
+}
+
+docs {
+  Revoca la sesión indicada en {{sessionId}}, que es la sesión actual (la del último login):
+  tras ejecutarla tendrás que iniciar sesión de nuevo.
+}

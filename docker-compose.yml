@@ -1,0 +1,55 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nestjs_rest_api
+    restart: unless-stopped
+    ports:
+      - "3011:3011"
+    environment:
+      - PORT=3011
+      - NODE_ENV=production
+      # none | basic | full (vacío = full). Con AUTH_MODE=none los secretos JWT no se usan, pero
+      # Compose los sigue exigiendo: define cualquier valor o quita esas dos líneas.
+      - AUTH_MODE=${AUTH_MODE:-}
+      # Los secretos NUNCA se versionan: se leen del entorno o de un archivo .env local (ignorado por git).
+      # Genera valores seguros con: openssl rand -base64 48
+      - JWT_SECRET=${JWT_SECRET:?Define JWT_SECRET en el entorno o en .env}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?Define JWT_REFRESH_SECRET en el entorno o en .env}
+      - DATABASE_URL=file:/app/data/prod.db
+      - TRUST_PROXY=${TRUST_PROXY:-false}
+      - TRUST_PROXY_HOPS=${TRUST_PROXY_HOPS:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      # Opcionales: vacío = valor por defecto de la aplicación
+      - ENABLE_DOCS=${ENABLE_DOCS:-}
+      - LOG_LEVEL=${LOG_LEVEL:-}
+      - LOGIN_RATE_LIMIT_MAX=${LOGIN_RATE_LIMIT_MAX:-}
+      - REFRESH_RATE_LIMIT_MAX=${REFRESH_RATE_LIMIT_MAX:-}
+      - REGISTER_RATE_LIMIT_MAX=${REGISTER_RATE_LIMIT_MAX:-}
+      - MAIL_TRANSPORT=${MAIL_TRANSPORT:-}
+      - SMTP_URL=${SMTP_URL:-}
+      - MAIL_FROM=${MAIL_FROM:-}
+      - APP_URL=${APP_URL:-}
+      - PASSWORD_RESET_TTL_MINUTES=${PASSWORD_RESET_TTL_MINUTES:-}
+      - EMAIL_VERIFY_TTL_HOURS=${EMAIL_VERIFY_TTL_HOURS:-}
+      - REQUIRE_EMAIL_VERIFICATION=${REQUIRE_EMAIL_VERIFICATION:-}
+      - MFA_ENCRYPTION_KEY=${MFA_ENCRYPTION_KEY:-}
+      - MFA_ISSUER=${MFA_ISSUER:-}
+      - RECOVERY_RATE_LIMIT_MAX=${RECOVERY_RATE_LIMIT_MAX:-}
+      - MFA_RATE_LIMIT_MAX=${MFA_RATE_LIMIT_MAX:-}
+      - LOGIN_LOCKOUT_MAX_FAILURES=${LOGIN_LOCKOUT_MAX_FAILURES:-}
+      - LOGIN_LOCKOUT_MINUTES=${LOGIN_LOCKOUT_MINUTES:-}
+      - AUDIT_RETENTION_DAYS=${AUDIT_RETENTION_DAYS:-}
+      - REFRESH_REUSE_GRACE_SECONDS=${REFRESH_REUSE_GRACE_SECONDS:-}
+      # Turso/libSQL remoto (si se define, sustituye al SQLite local)
+      - TURSO_DATABASE_URL=${TURSO_DATABASE_URL:-}
+      - TURSO_AUTH_TOKEN=${TURSO_AUTH_TOKEN:-}
+    volumes:
+      # Volumen persistente para almacenar el archivo SQLite de producción
+      - sqlite_data:/app/data
+
+volumes:
+  sqlite_data:

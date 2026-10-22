@@ -1,0 +1,25 @@
+meta {
+  name: Verify Email
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/auth/verify-email
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "token": "PEGA_AQUI_EL_TOKEN_DEL_CORREO"
+  }
+}
+
+docs {
+  Verifica el email con el token del correo de verificación (un solo uso).
+}

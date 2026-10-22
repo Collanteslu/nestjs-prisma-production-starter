@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { Logger } from "@nestjs/common";
-import type { INestApplication } from "@nestjs/common";
+import type { INestApplication, LogLevel } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
@@ -12,6 +12,24 @@ import { assertMigrationsUpToDate } from "./database/migrations-guard";
 import { CleanupService } from "./jobs/cleanup.service";
 
 /**
+ * LOG_LEVEL (trace…fatal|silent, the same vocabulary the reference uses for its logger)
+ * mapped onto Nest's logger levels: Nest has no `fatal` (it maps to `error`) and no `trace`
+ * (it maps to `verbose`).
+ */
+function nestLogLevels(level: string | undefined): LogLevel[] {
+  const levels: Record<string, LogLevel[]> = {
+    silent: [],
+    fatal: ["error"],
+    error: ["error"],
+    warn: ["warn", "error"],
+    info: ["log", "warn", "error"],
+    debug: ["debug", "log", "warn", "error"],
+    trace: ["verbose", "debug", "log", "warn", "error"],
+  };
+  return levels[level ?? "info"] ?? levels.info;
+}
+
+/**
  * Explicit boot order (same phases as the reference):
  *   1. config (loadEnv, fail fast)          2. Nest create + HTTP wiring
  *   3. connect (PrismaService.onModuleInit) 4. SQLite pragmas
@@ -21,6 +39,8 @@ import { CleanupService } from "./jobs/cleanup.service";
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
   const features = featuresOf(env);
+  // Apply LOG_LEVEL before any log statement (the boot warnings below included)
+  Logger.overrideLogger(nestLogLevels(env.LOG_LEVEL));
   const logger = new Logger("Bootstrap");
 
   // Configuration traps that would otherwise only surface as an incident: both are warnings, not

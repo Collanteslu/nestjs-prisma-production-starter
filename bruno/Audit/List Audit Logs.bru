@@ -1,0 +1,25 @@
+meta {
+  name: List Audit Logs
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/audit-logs?page=1&limit=20
+  body: none
+  auth: none
+}
+
+params:query {
+  page: 1
+  limit: 20
+  ~entity: Task
+  ~action: SOFT_DELETE
+  ~userId: user-1
+}
+
+docs {
+  Solo administradores. Acciones: LOGIN, LOGIN_FAILED, LOGOUT, REGISTER, CREATE, UPDATE,
+  PASSWORD_CHANGE, SOFT_DELETE, RESTORE, DELETE_PERMANENT, BLOCK, UNBLOCK, REVOKE_SESSION,
+  REVOKE_ALL_SESSIONS, TOKEN_REUSE_DETECTED. limit máximo: 100.
+}
