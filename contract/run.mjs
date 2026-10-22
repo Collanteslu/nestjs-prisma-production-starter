@@ -51,6 +51,8 @@ const GROUP_ORDER = [
 
 const sink = startSmtpSink(smtpPort);
 const ctx = new Ctx({ baseUrl: base, mode, dbPath });
+// Captured emails land here (recovery/mfa scenarios read ctx.outbox.messages)
+ctx.outbox = sink;
 
 const CREDS = {
   admin: ["admin@example.com", "password123"],
