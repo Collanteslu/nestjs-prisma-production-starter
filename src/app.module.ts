@@ -12,7 +12,6 @@ import { DatabaseModule } from "./database/database.module";
 import { SeedService } from "./database/seed.service";
 import { HealthController } from "./health/health.controller";
 import { SystemController } from "./system/system.controller";
-import { SpikeController } from "./spike/spike.controller";
 import { AuditLogsModule } from "./audit/audit-logs.module";
 import { AuditModule } from "./audit/audit.module";
 import { MailModule } from "./mail/mail.module";
@@ -59,7 +58,7 @@ export class AppModule {
         // Account security (recovery emails + MFA management) is AUTH_MODE=full only
         ...(features.accountSecurity ? [RecoveryModule, MfaRoutesModule] : []),
       ],
-      controllers: [HealthController, SystemController, SpikeController],
+      controllers: [HealthController, SystemController],
       providers: [
         SeedService,
         CleanupService,
