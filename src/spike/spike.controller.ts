@@ -13,6 +13,7 @@ import { ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { ZodResponse } from "nestjs-zod";
 import type { Request } from "express";
 import { NoEnvelope, TopLevelEnvelope } from "../common/decorators/envelope.decorator";
+import { Public } from "../common/decorators/public.decorator";
 import { ItemDto, SpikeBodyDto, SpikeParamDto, SpikeQueryDto } from "./spike.dto";
 
 /**
@@ -23,6 +24,7 @@ import { ItemDto, SpikeBodyDto, SpikeParamDto, SpikeQueryDto } from "./spike.dto
  */
 @ApiTags("spike")
 @Controller("api/spike")
+@Public() // dev routes stay reachable without a token (module removed at integration)
 export class SpikeController {
   @Post("body")
   @ApiOperation({ summary: "Validated body (nested, defaults, enum, strip unknown)" })

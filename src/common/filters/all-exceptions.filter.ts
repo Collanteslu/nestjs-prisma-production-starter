@@ -4,6 +4,8 @@ import type { Response } from "express";
 import { ZodValidationException, ZodSerializationException } from "nestjs-zod";
 import type { ZodError } from "zod";
 import { Prisma } from "../../generated/client/client";
+import { buildMeta } from "../../instrumentation/request-context";
+import { RateLimitedException, RetryAfterException } from "../exceptions/retry-after.exception";
 import {
   INTERNAL_ERROR_MESSAGE,
   MALFORMED_JSON_MESSAGE,
@@ -44,7 +46,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let status: number;
     let message: string;
     let errors: Record<string, string[]> | undefined;
-    let details: string | undefined;
+    let details: unknown;
+    let retryAfterSeconds: number | undefined;
+    let rateLimitedBody = false;
 
     if (isBodyParserError(exception)) {
       // Normally handled by the raw-Express error middleware; belt and braces.
@@ -74,6 +78,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
         status = 500;
         message = INTERNAL_ERROR_MESSAGE;
       }
+    } else if (exception instanceof RateLimitedException) {
+      // The reference limiter answers with its own body shape: top-level retryAfterSeconds
+      status = exception.getStatus();
+      message = exception.message;
+      retryAfterSeconds = exception.retryAfterSeconds;
+      rateLimitedBody = true;
+    } else if (exception instanceof RetryAfterException) {
+      // Standard envelope + Retry-After header (login lockout)
+      status = exception.getStatus();
+      message = exception.message;
+      retryAfterSeconds = exception.retryAfterSeconds;
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const request = host.switchToHttp().getRequest<{ method: string; path: string }>();
@@ -89,11 +104,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
           const body = payload as {
             message?: string | string[];
             errors?: Record<string, string[]>;
+            details?: unknown;
           };
           message = Array.isArray(body.message)
             ? body.message.join(", ")
             : (body.message ?? exception.message);
           errors = body.errors;
+          // e.g. login's {code: "EMAIL_NOT_VERIFIED"} / {code: "MFA_REQUIRED"}
+          details = body.details;
         } else {
           message = exception.message;
         }
@@ -116,6 +134,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
     }
 
+    if (retryAfterSeconds !== undefined) {
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+    }
+    if (rateLimitedBody) {
+      res.status(status).json({
+        success: false,
+        message,
+        retryAfterSeconds,
+        meta: buildMeta(),
+      });
+      return;
+    }
     res.status(status).json(buildErrorPayload(message, errors, details));
   }
 }

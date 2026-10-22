@@ -1,8 +1,9 @@
 import { Module } from "@nestjs/common";
 import type { DynamicModule } from "@nestjs/common";
-import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from "@nestjs/core";
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from "@nestjs/core";
 import { ZodSerializerInterceptor } from "nestjs-zod";
 import type { Env } from "./config/env";
+import { featuresOf } from "./config/env";
 import { ConfigProviderModule } from "./config/config.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { ContractValidationPipe } from "./common/pipes/contract-validation.pipe";
@@ -12,6 +13,13 @@ import { SeedService } from "./database/seed.service";
 import { HealthController } from "./health/health.controller";
 import { SystemController } from "./system/system.controller";
 import { SpikeController } from "./spike/spike.controller";
+import { AuditModule } from "./audit/audit.module";
+import { MailModule } from "./mail/mail.module";
+import { RateLimitGuard } from "./rate-limit/rate-limit.guard";
+import { RateLimitModule } from "./rate-limit/rate-limit.module";
+import { JwtAuthGuard } from "./auth/jwt-auth.guard";
+import { AuthModule } from "./auth/auth.module";
+import { SessionsModule } from "./sessions/sessions.module";
 
 /**
  * Application root. Configuration enters through `AppModule.forRoot(env)` — no module
@@ -19,7 +27,7 @@ import { SpikeController } from "./spike/spike.controller";
  * published by the global ConfigProviderModule.
  *
  * Global providers follow the reference's pipeline order:
- * guards (auth/rate-limit, added in Fase D) → validation pipe → serializer →
+ * guards (JWT auth → rate limit) → validation pipe → serializer →
  * envelope interceptor → exception filter.
  *
  * Interceptor registration order matters: TransformInterceptor (envelope) must be
@@ -28,12 +36,23 @@ import { SpikeController } from "./spike/spike.controller";
 @Module({})
 export class AppModule {
   static forRoot(env: Env): DynamicModule {
+    const features = featuresOf(env);
     return {
       module: AppModule,
-      imports: [ConfigProviderModule.forEnv(env), DatabaseModule],
+      imports: [
+        ConfigProviderModule.forEnv(env),
+        DatabaseModule,
+        RateLimitModule,
+        AuditModule,
+        MailModule,
+        // The auth stack (and its routes) exists exactly when the reference mounts it
+        ...(features.auth ? [SessionsModule, AuthModule] : []),
+      ],
       controllers: [HealthController, SystemController, SpikeController],
       providers: [
         SeedService,
+        { provide: APP_GUARD, useClass: JwtAuthGuard },
+        { provide: APP_GUARD, useClass: RateLimitGuard },
         { provide: APP_PIPE, useClass: ContractValidationPipe },
         { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
         { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor },

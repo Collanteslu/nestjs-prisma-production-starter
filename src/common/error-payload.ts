@@ -37,7 +37,7 @@ export function groupZodIssues(
 export function buildErrorPayload(
   message: string,
   errors?: Record<string, string[]>,
-  details?: string,
+  details?: unknown,
 ): Record<string, unknown> {
   const meta = buildMeta();
   return {
