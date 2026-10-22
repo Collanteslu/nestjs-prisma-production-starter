@@ -10,15 +10,10 @@ import { IS_PUBLIC_KEY } from "../common/decorators/public.decorator";
 import type { AuthUserPayload, JwtPayload } from "../auth/auth.types";
 
 /**
- * Global authentication guard (port of the reference's authMiddleware):
- * 1. Cryptographic validation: verifies the JWT signature (HS256, JWT_SECRET).
- * 2. Real-time block checking: `user.isBlocked` is re-read from the database, so a
- *    suspended account is refused immediately, whatever the token's remaining life.
- * 3. Stateful session validation: the `sessionId` must exist and be active, so a revoked
- *    session dies instantly without waiting for the JWT to expire.
- *
- * The role attached to the request comes from the database, so role changes apply
- * immediately. `@Public()` routes and AUTH_MODE=none skip the guard entirely.
+ * Global authentication guard (port of the reference's authMiddleware): runs `authenticate`
+ * on every matched route. The role attached to the request comes from the database, so
+ * role changes apply immediately. `@Public()` routes and AUTH_MODE=none skip the guard
+ * entirely, and requests already authenticated by AuthPrefixMiddleware are not re-verified.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -39,6 +34,22 @@ export class JwtAuthGuard implements CanActivate {
     if (isPublic || !this.features.auth) return true;
 
     const request = ctx.switchToHttp().getRequest<Request & { user?: AuthUserPayload }>();
+    // AuthPrefixMiddleware already authenticated this request (protected prefixes)
+    if (request.user) return true;
+
+    await this.authenticate(request);
+    return true;
+  }
+
+  /**
+   * Full authentication of a request (port of the reference's authMiddleware core).
+   * 1. Cryptographic validation: verifies the JWT signature (HS256, JWT_SECRET).
+   * 2. Real-time block checking: `user.isBlocked` is re-read from the database.
+   * 3. Stateful session validation: the `sessionId` must exist and be active.
+   * Attaches `request.user` on success; throws 401/403 otherwise. Shared with
+   * AuthPrefixMiddleware so the verification logic exists exactly once.
+   */
+  async authenticate(request: Request & { user?: AuthUserPayload }): Promise<AuthUserPayload> {
     const authHeader = request.headers.authorization;
 
     // Verify Bearer schema structure
@@ -94,12 +105,13 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException("Session has been revoked or expired. Please sign in again.");
     }
 
-    request.user = {
+    const identity: AuthUserPayload = {
       userId: payload.userId,
       sessionId: payload.sessionId,
       email: payload.email,
       role: user.role,
     };
-    return true;
+    request.user = identity;
+    return identity;
   }
 }

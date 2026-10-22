@@ -7,6 +7,7 @@ import SwaggerParser from "@apidevtools/swagger-parser";
 import { AppModule } from "../src/app.module";
 import { configureApp } from "../src/configure-app";
 import { featuresOf, loadEnv } from "../src/config/env";
+import { PrismaService } from "../src/database/prisma.service";
 
 /**
  * Integration suite over the real surface. The Fase B spike (which validated the stack
@@ -36,6 +37,10 @@ describe("app: HTTP infrastructure over the real surface", () => {
     app = moduleRef.createNestApplication({ bodyParser: false });
     await configureApp(app, env, featuresOf(env));
     await app.init();
+
+    // The test database is persistent (tmpdir survives across runs): reset the per-IP
+    // rate-limit counters so repeated runs are not throttled by their own history
+    await app.get(PrismaService).rateLimitBucket.deleteMany({});
 
     // A real account, to exercise the authenticated surface
     await http()

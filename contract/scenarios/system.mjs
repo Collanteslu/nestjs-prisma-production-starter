@@ -110,12 +110,19 @@ export default {
     await ctx.t(
       "timing headers also on error responses (guards run after request id)",
       async () => {
-        const res = await ctx.get("/api/tasks", { token: null });
-        ctx.status(res, 401);
-        ctx.ok(!!res.headers["x-request-id"], "x-request-id must exist on 401");
+        // En modo `none` no hay guard: el primer error temprano es la validación del body
+        const res =
+          ctx.mode === "none"
+            ? await ctx.req("POST", "/api/tasks", { body: { title: "" }, token: null })
+            : await ctx.get("/api/tasks", { token: null });
+        ctx.status(res, ctx.mode === "none" ? 400 : 401);
+        ctx.ok(
+          !!res.headers["x-request-id"],
+          "x-request-id must exist on the error response",
+        );
         ctx.ok(
           !!res.headers["server-timing"] || !!res.headers["x-response-time"],
-          "timing headers must exist on 401",
+          "timing headers must exist on the error response",
         );
       },
     );

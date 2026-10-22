@@ -44,7 +44,11 @@ export default {
           ["GET", "/api/users"],
           ["GET", "/api/audit-logs"],
         ]) {
-          const res = await ctx.req(method, path, { body: {}, token: null });
+          // fetch no admite body en GET/HEAD: solo se envía en los métodos que lo permiten
+          const res = await ctx.req(method, path, {
+            body: method === "GET" ? undefined : {},
+            token: null,
+          });
           ctx.status(res, 404, `${method} ${path}`);
         }
       });
@@ -101,21 +105,23 @@ export default {
       });
 
       await ctx.t("basic: account-security routes answer 404", async () => {
-        for (const [method, path] of [
-          ["POST", "/api/auth/forgot-password"],
-          ["POST", "/api/auth/reset-password"],
-          ["POST", "/api/auth/verify-email"],
-          ["POST", "/api/auth/resend-verification"],
-          ["POST", "/api/auth/mfa/setup"],
-          ["POST", "/api/auth/mfa/enable"],
-          ["POST", "/api/auth/mfa/disable"],
-          ["DELETE", "/api/users/user-1/mfa"],
+        for (const [method, path, expected] of [
+          // Bajo /api/auth (sin prefijo protegido) la ruta inexistente es 404
+          ["POST", "/api/auth/forgot-password", 404],
+          ["POST", "/api/auth/reset-password", 404],
+          ["POST", "/api/auth/verify-email", 404],
+          ["POST", "/api/auth/resend-verification", 404],
+          ["POST", "/api/auth/mfa/setup", 404],
+          ["POST", "/api/auth/mfa/enable", 404],
+          ["POST", "/api/auth/mfa/disable", 404],
+          // /api/users es prefijo protegido: el middleware corre aunque la ruta no exista
+          ["DELETE", "/api/users/user-1/mfa", 401],
         ]) {
           const res = await ctx.req(method, path, {
             body: { token: "x", password: "x".repeat(10) },
             token: null,
           });
-          ctx.status(res, 404, `${method} ${path}`);
+          ctx.status(res, expected, `${method} ${path}`);
         }
       });
 
