@@ -110,6 +110,29 @@ export async function configureApp(
       },
     ];
 
+    // Parity with the reference's `documentForMode`: with AUTH_MODE=none the published
+    // spec carries no security and no auth responses (the @ApiBearerAuth decorator cannot
+    // see the injected config, so its output is adjusted here, together with any scheme
+    // the decorator may have declared).
+    if (!features.auth) {
+      delete (document.components as { securitySchemes?: Record<string, unknown> } | undefined)
+        ?.securitySchemes?.["BearerAuth"];
+      for (const item of Object.values(document.paths ?? {})) {
+        for (const operation of Object.values((item ?? {}) as Record<string, unknown>)) {
+          if (typeof operation !== "object" || operation === null) continue;
+          const op = operation as {
+            security?: unknown;
+            responses?: Record<string, unknown>;
+          };
+          delete op.security;
+          if (op.responses) {
+            delete op.responses["401"];
+            delete op.responses["403"];
+          }
+        }
+      }
+    }
+
     app.use("/openapi.json", (_req: Request, res: Response) => {
       res.json(document);
     });

@@ -13,6 +13,7 @@ import { SeedService } from "./database/seed.service";
 import { HealthController } from "./health/health.controller";
 import { SystemController } from "./system/system.controller";
 import { SpikeController } from "./spike/spike.controller";
+import { AuditLogsModule } from "./audit/audit-logs.module";
 import { AuditModule } from "./audit/audit.module";
 import { MailModule } from "./mail/mail.module";
 import { RateLimitGuard } from "./rate-limit/rate-limit.guard";
@@ -20,6 +21,8 @@ import { RateLimitModule } from "./rate-limit/rate-limit.module";
 import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 import { AuthModule } from "./auth/auth.module";
 import { SessionsModule } from "./sessions/sessions.module";
+import { TasksModule } from "./tasks/tasks.module";
+import { UsersModule } from "./users/users.module";
 
 /**
  * Application root. Configuration enters through `AppModule.forRoot(env)` — no module
@@ -45,8 +48,9 @@ export class AppModule {
         RateLimitModule,
         AuditModule,
         MailModule,
+        TasksModule, // public/ownerless with AUTH_MODE=none, bearer-protected otherwise
         // The auth stack (and its routes) exists exactly when the reference mounts it
-        ...(features.auth ? [SessionsModule, AuthModule] : []),
+        ...(features.auth ? [SessionsModule, AuthModule, UsersModule, AuditLogsModule] : []),
       ],
       controllers: [HealthController, SystemController, SpikeController],
       providers: [
