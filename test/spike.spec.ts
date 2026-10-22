@@ -5,6 +5,7 @@ import request from "supertest";
 import SwaggerParser from "@apidevtools/swagger-parser";
 import { AppModule } from "../src/app.module";
 import { configureApp } from "../src/configure-app";
+import { featuresOf, loadEnv } from "../src/config/env";
 
 /**
  * Fase B — spike de compatibilidad: NestJS 12 + TS 6 (CommonJS/nodenext) +
@@ -16,9 +17,12 @@ describe("spike: NestJS 12 + nestjs-zod 5 + Express 5", () => {
   const http = () => request(app.getHttpServer());
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const env = loadEnv();
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule.forRoot(env)],
+    }).compile();
     app = moduleRef.createNestApplication({ bodyParser: false });
-    await configureApp(app);
+    await configureApp(app, env, featuresOf(env));
     await app.init();
   });
 
@@ -184,6 +188,36 @@ describe("spike: NestJS 12 + nestjs-zod 5 + Express 5", () => {
       expect(res.headers["etag"]).toBeUndefined();
       expect(res.headers["x-powered-by"]).toBeUndefined();
       expect(res.headers["access-control-allow-origin"]).toBe("*");
+    });
+  });
+
+  describe("sistema (healthz, índice y 404)", () => {
+    it("GET /healthz responde con sonda SQLite y uptime", async () => {
+      const res = await http().get("/healthz").expect(200);
+      expect(res.body.status).toBe("healthy");
+      expect(typeof res.body.timestamp).toBe("string");
+      expect(typeof res.body.uptimeSeconds).toBe("number");
+      expect(res.body.database).toMatchObject({ status: "connected" });
+      expect(typeof res.body.database.latencyMs).toBe("number");
+    });
+
+    it("GET / lista los endpoints del modo activo", async () => {
+      const res = await http().get("/").expect(200);
+      expect(res.body.status).toBe("online");
+      expect(typeof res.body.name).toBe("string");
+      expect(typeof res.body.version).toBe("string");
+      expect(res.body.authMode).toBe("full");
+      expect(res.body.endpoints.healthcheck).toBe("/healthz");
+      expect(res.body.endpoints.auth.login).toBe("POST /api/auth/login");
+      expect(res.body.endpoints.mfa.setup).toBe("POST /api/auth/mfa/setup");
+      expect(res.body.endpoints.tasks).toBe("GET, POST, PUT, DELETE /api/tasks");
+    });
+
+    it("ruta inexistente → 404 con el mensaje exacto del baseline", async () => {
+      const res = await http().get("/nonexistent").expect(404);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe("Route not found: GET /nonexistent");
+      expect(res.body.meta.requestId).toBeDefined();
     });
   });
 

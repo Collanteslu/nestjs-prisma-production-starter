@@ -25,7 +25,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "contract": "node contract/run.mjs"
+    "contract": "node contract/run.mjs",
+    "prebuild": "prisma generate"
   },
   "lint-staged": {
     "*.{ts,js,mjs,cjs,json,md}": [

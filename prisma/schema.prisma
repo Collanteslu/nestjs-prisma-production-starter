@@ -1,0 +1,158 @@
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/client"
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          String    @default("user") // "admin" | "user"
+  isBlocked     Boolean   @default(false)
+  blockedReason String?
+  deletedAt     DateTime? // Soft delete timestamp
+  createdAt     DateTime  @default(now())
+
+  // Email verification and two-factor authentication (TOTP)
+  emailVerifiedAt DateTime?
+  totpSecret      String? // AES-256-GCM encrypted base32 secret (omitted from every query by default)
+  totpEnabledAt   DateTime? // null while setup is pending or MFA is off
+  totpLastStep    Int? // last accepted 30s time step, so a code cannot be replayed (omitted by default)
+
+  // Relaciones
+  tasks         Task[]
+  refreshTokens RefreshToken[]
+  sessions      Session[]
+  auditLogs     AuditLog[]
+  authTokens    AuthToken[]
+  recoveryCodes RecoveryCode[]
+}
+
+/// Single-use tokens emailed to users (password reset, email verification). Stored only as SHA-256.
+model AuthToken {
+  id        String    @id @default(uuid())
+  userId    String
+  type      String // "password_reset" | "email_verify"
+  email     String // address the token was emailed to: it only works while it is still the account's email
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([expiresAt])
+  // The cleanup job purges `expiresAt < now OR usedAt < now`: SQLite needs both branches indexed
+  @@index([usedAt])
+}
+
+/// One-time MFA recovery codes, stored only as SHA-256.
+model RecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Unique per user only: codes of different users never clash (this index also serves userId lookups)
+  @@unique([userId, codeHash])
+  // Cleanup job purges used codes older than the retention window
+  @@index([usedAt])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  userAgent String?
+  ipAddress String?
+  isActive  Boolean  @default(true)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  // [userId, createdAt] also serves plain userId lookups and the sessions list ordering;
+  // the other two match the cleanup job's deleteMany conditions
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@index([isActive, updatedAt])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique // SHA-256 of the signed refresh JWT (never stored in plaintext)
+  userId    String
+  sessionId String?
+  usedAt    DateTime? // Set when rotated; distinguishes concurrent refreshes from token reuse
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+  // Cleanup job purges by expiry or by rotation age
+  @@index([expiresAt])
+  @@index([usedAt])
+}
+
+/// Example resource. Owned by a user with AUTH_MODE=basic/full; ownerless (userId null, public)
+/// with AUTH_MODE=none. Ownerless tasks are never visible to regular users in the auth modes.
+model Task {
+  id          String    @id @default(uuid())
+  userId      String?
+  title       String
+  description String    @default("")
+  completed   Boolean   @default(false)
+  deletedAt   DateTime? // Soft delete timestamp
+  createdAt   DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Covers the owner + soft-delete filter and the default `createdAt` ordering of the list
+  @@index([userId, deletedAt, createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String // e.g. "CREATE", "UPDATE", "DELETE", "SOFT_DELETE", "LOGIN", "BLOCK"
+  entity    String // e.g. "Task", "User", "Session"
+  entityId  String?
+  details   String? // JSON string or summary of changes
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // GET /api/audit-logs always sorts by createdAt and may filter by any one of these columns, so
+  // each filter gets its own (column, createdAt) index: a composite with a different leading column
+  // cannot serve the sort (SQLite uses at most one index per table).
+  @@index([createdAt])
+  @@index([entity, createdAt])
+  @@index([action, createdAt])
+  // Also needed by the FK SetNull on user delete
+  @@index([userId, createdAt])
+}
+
+/// Fixed-window counters shared by every instance (rate limits and login lockout), so limits hold
+/// across replicas when the database is shared (Turso). Expired rows are purged by the cleanup job.
+model RateLimitBucket {
+  key     String   @id // e.g. "rl:login:203.0.113.7" or "lockout:ana@example.com"
+  count   Int
+  resetAt DateTime
+
+  @@index([resetAt])
+}

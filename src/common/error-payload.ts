@@ -14,7 +14,8 @@ export const MALFORMED_JSON_MESSAGE = "Malformed JSON in request body";
 export const PAYLOAD_TOO_LARGE_MESSAGE =
   "Payload Too Large: Request body exceeds the maximum permitted limit of 100 KB.";
 export const VALIDATION_MESSAGE = "Validation error in request payload";
-export const INTERNAL_ERROR_MESSAGE = "Internal server error";
+export const INTERNAL_ERROR_MESSAGE = "Internal server error.";
+export const REQUEST_FALLBACK_MESSAGE = "Request could not be processed.";
 
 export const BODY_LIMIT_BYTES = 100 * 1024;
 
@@ -36,11 +37,13 @@ export function groupZodIssues(
 export function buildErrorPayload(
   message: string,
   errors?: Record<string, string[]>,
+  details?: string,
 ): Record<string, unknown> {
   const meta = buildMeta();
   return {
     success: false,
     message,
+    ...(details !== undefined ? { details } : {}),
     ...(errors && Object.keys(errors).length > 0 ? { errors } : {}),
     ...(meta ? { meta } : {}),
   };

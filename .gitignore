@@ -11,3 +11,4 @@ dev.db*
 *.db
 *.db-shm
 *.db-wal
+src/generated/

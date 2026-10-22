@@ -1,12 +1,14 @@
 import type { ArgumentsHost, ExceptionFilter } from "@nestjs/common";
-import { Catch, HttpException, Logger } from "@nestjs/common";
+import { Catch, HttpException, Logger, NotFoundException } from "@nestjs/common";
 import type { Response } from "express";
 import { ZodValidationException, ZodSerializationException } from "nestjs-zod";
 import type { ZodError } from "zod";
+import { Prisma } from "../../generated/client/client";
 import {
   INTERNAL_ERROR_MESSAGE,
   MALFORMED_JSON_MESSAGE,
   PAYLOAD_TOO_LARGE_MESSAGE,
+  REQUEST_FALLBACK_MESSAGE,
   VALIDATION_MESSAGE,
   buildErrorPayload,
   groupZodIssues,
@@ -39,9 +41,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const res = host.switchToHttp().getResponse<Response>();
 
-    let status = 500;
+    let status: number;
     let message: string;
     let errors: Record<string, string[]> | undefined;
+    let details: string | undefined;
 
     if (isBodyParserError(exception)) {
       // Normally handled by the raw-Express error middleware; belt and braces.
@@ -58,32 +61,61 @@ export class AllExceptionsFilter implements ExceptionFilter {
       );
       status = 500;
       message = INTERNAL_ERROR_MESSAGE;
+    } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      // Same mapping as the reference error handler (P2002 → 409, P2025 → 404)
+      if (exception.code === "P2002") {
+        status = 409;
+        message = "Conflict: A record with the same unique value already exists.";
+      } else if (exception.code === "P2025") {
+        status = 404;
+        message = "Resource not found.";
+      } else {
+        this.logger.error(`Prisma error ${exception.code}: ${exception.message}`);
+        status = 500;
+        message = INTERNAL_ERROR_MESSAGE;
+      }
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
-      const payload = exception.getResponse();
-      if (typeof payload === "string") {
-        message = payload;
-      } else if (typeof payload === "object" && payload !== null) {
-        const body = payload as { message?: string | string[]; errors?: Record<string, string[]> };
-        message = Array.isArray(body.message)
-          ? body.message.join(", ")
-          : (body.message ?? exception.message);
-        errors = body.errors;
+      const request = host.switchToHttp().getRequest<{ method: string; path: string }>();
+      // Nest's built-in routing 404 ("Cannot GET /path") is reworded to the reference's
+      // not-found envelope: `Route not found: <METHOD> <path>`
+      if (exception instanceof NotFoundException && /^Cannot [A-Z]+ /.test(exception.message)) {
+        message = `Route not found: ${request.method} ${request.path}`;
       } else {
-        message = exception.message;
+        const payload = exception.getResponse();
+        if (typeof payload === "string") {
+          message = payload;
+        } else if (typeof payload === "object" && payload !== null) {
+          const body = payload as {
+            message?: string | string[];
+            errors?: Record<string, string[]>;
+          };
+          message = Array.isArray(body.message)
+            ? body.message.join(", ")
+            : (body.message ?? exception.message);
+          errors = body.errors;
+        } else {
+          message = exception.message;
+        }
+        if (!message) message = REQUEST_FALLBACK_MESSAGE;
       }
     } else {
       this.logger.error(
         exception instanceof Error ? exception.stack : String(exception),
         exception instanceof Error ? exception.message : undefined,
       );
-      // Parity: in development the reference implementation leaks err.message.
-      message =
-        process.env.NODE_ENV !== "production" && exception instanceof Error && exception.message
-          ? exception.message
-          : INTERNAL_ERROR_MESSAGE;
+      status = 500;
+      message = INTERNAL_ERROR_MESSAGE;
+      // Parity: the reference leaks err.message under `details`, development only
+      if (
+        process.env.NODE_ENV === "development" &&
+        exception instanceof Error &&
+        exception.message
+      ) {
+        details = exception.message;
+      }
     }
 
-    res.status(status).json(buildErrorPayload(message, errors));
+    res.status(status).json(buildErrorPayload(message, errors, details));
   }
 }
