@@ -316,12 +316,17 @@ runtime with `TURSO_DATABASE_URL`. The startup guard
 Every new or changed endpoint needs a request in `bruno/<Module>/`. Tokens are runtime
 variables set by the `Login *` post-response scripts and are never written to disk;
 `environments/Local.bru` only holds `baseUrl`. The collection is validated LIVE by
-`scripts/bruno-smoke.sh <baseUrl>` (local `@usebruno/cli`): it runs all 36 files in a
-controlled order with fresh tokens, asserts each file's HTTP status via the reporter,
-and encodes which endpoints are manual by design (pasted tokens/TOTP codes → 400/409)
-and which are destructive (`Users/Delete User` is skipped over the demo users). CI runs
-it in the `contract-parity` full leg against the contract database — a URL or body that
-drifts from the API turns red there.
+`scripts/bruno-smoke.sh <baseUrl> [db]` (optional second argument resets the rate-limit
+counters first — the preceding contract run leaves the demo accounts locked): it runs
+all 36 files in a controlled order with fresh tokens, asserts each file's HTTP status
+via the reporter, and encodes which endpoints are manual by design (pasted
+tokens/TOTP codes → 400/409) and which are destructive (`Users/Delete User` is skipped
+over the demo users). The Bruno CLI is invoked pinned-by-version through `npx` (or the
+local bin if you install it yourself) and is deliberately **not** a devDependency: its
+own tree carries unfixed advisories (axios/nanoid/js-yaml…) that would keep
+`npm audit --audit-level=high` permanently red — the gate protects the application's
+dependency graph; the CLI only speaks HTTP to localhost. CI runs the battery in the
+`contract-parity` full leg — a URL or body that drifts from the API turns red there.
 
 ## Safety rules
 

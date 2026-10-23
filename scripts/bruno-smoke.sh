@@ -2,7 +2,15 @@
 set -euo pipefail
 
 # Batería VIVA de la colección Bruno (validación a fondo):
-#   scripts/bruno-smoke.sh [baseUrl]     # por defecto http://127.0.0.1:3011
+#   scripts/bruno-smoke.sh [baseUrl] [dbSQLite]
+#   baseUrl por defecto http://127.0.0.1:3011; si se pasa la BD, se reinician los
+#   contadores de rate limit ANTES (el contrato deja a las cuentas demo bloqueadas:
+#   el grupo ratelimit-login es el último y su lockout duraría 15 minutos).
+#
+# CLI: se usa el bin local si existe; si no, npx con la versión EXACTA. No es
+# devDependency a propósito: el árbol de @usebruno/cli arrastra avisos sin fix en
+# axios/nanoid/js-yaml y mantendría el `npm audit` de la plantilla permanentemente
+# rojo (gate de CI). Fijada por versión y sólo habla HTTP con localhost.
 #
 # Ejecuta los 36 ficheros de la colección contra un servidor en marcha con la CLI local
 # (@usebruno/cli, fijada en devDependencies), en un ORDEN CONTROLADO y con tokens
@@ -17,13 +25,28 @@ set -euo pipefail
 #     (su contraparte soft-delete/restore ya está cubierto por el contrato en tasks/users).
 #   - Register/Create aceptan 201 ó 409 (re-ejecuciones contra la misma BD).
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BRU="$ROOT/node_modules/.bin/bru"
+cd "$ROOT"
 BASE="${1:-http://127.0.0.1:3011}"
+DB="${2:-}"
+BRUNO_VERSION="4.3.0"
+BRU=("$ROOT/node_modules/.bin/bru")
+[ -x "$ROOT/node_modules/.bin/bru" ] || BRU=(npx -y --package="@usebruno/cli@$BRUNO_VERSION" bru)
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/bruno-smoke.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
-[ -x "$BRU" ] || { echo "Falta la CLI: npm ci (devDependency @usebruno/cli)" >&2; exit 2; }
 curl -sf "$BASE/healthz" >/dev/null || { echo "No hay servidor en $BASE (arráncalo en modo full con usuarios demo)" >&2; exit 2; }
+
+# El contrato ejecutado antes (orden de la CI) puede dejar lockouts de 15 min por cuenta:
+# se limpian los contadores igual que hace el runner entre grupos.
+if [ -n "$DB" ]; then
+  node -e '
+    const { createClient } = require("@libsql/client");
+    createClient({ url: "file:" + process.argv[1] })
+      .execute("DELETE FROM RateLimitBucket")
+      .then((r) => console.log("rate limits reiniciados (" + r.rowsAffected + " filas)"))
+      .catch((e) => { console.error(e.message); process.exit(1); });
+  ' "$DB"
+fi
 
 PASS=0
 FAIL=0
@@ -45,7 +68,7 @@ with_session()  { VARS=(--env-var "sessionId=$1" --env-var "token=$2"); }
 check() { # $1 descripción, $2 estados aceptados (csv), $3.. fichero .bru
   local desc="$1" expected="$2"; shift 2
   local report="$WORK/report.json" got
-  (cd "$ROOT/bruno" && "$BRU" run --env Local --env-var "baseUrl=$BASE" \
+  (cd "$ROOT/bruno" && "${BRU[@]}" run --env Local --env-var "baseUrl=$BASE" \
     "${VARS[@]}" --reporter-json "$report" "$@" >/dev/null 2>&1) || true
   got=$(node -e '
     try {

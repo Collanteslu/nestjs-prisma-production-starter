@@ -153,10 +153,12 @@ jobs:
         run: node contract/run.mjs --base http://127.0.0.1:3011 --mode ${{ matrix.mode }} --db "$PWD/contract-ci.db"
 
       # La colección Bruno, viva contra el mismo servidor (solo full: necesita los
-      # usuarios demo que siembra el modo completo; valida URL/cuerpos contra la API real)
+      # usuarios demo que siembra el modo completo). El contrato previo puede dejar
+      # lockouts (ratelimit-login es el último grupo): se pasan los contadores para
+      # reiniciarlos, igual que hace el runner entre grupos.
       - name: 📭 Batería Bruno (colección viva)
         if: matrix.mode == 'full'
-        run: ./scripts/bruno-smoke.sh http://127.0.0.1:3011
+        run: ./scripts/bruno-smoke.sh http://127.0.0.1:3011 "$PWD/contract-ci.db"
 
       - name: 📋 Log del servidor
         if: failure()
