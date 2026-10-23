@@ -50,6 +50,7 @@ import { PrismaService } from "../database/prisma.service";
 import type { Prisma, User } from "../generated/client/client";
 import { AccountMailService } from "../mail/account-mail.service";
 import { AuthTokensService } from "../mail/auth-tokens.service";
+import { EmailOutboxService } from "../mail/email-outbox.service";
 import { PasswordConfirmLockoutService } from "../rate-limit/password-confirm-lockout.service";
 import { SessionsService } from "../sessions/sessions.service";
 import {
@@ -82,6 +83,7 @@ export class UsersController {
     private readonly sessions: SessionsService,
     private readonly authTokens: AuthTokensService,
     private readonly accountMail: AccountMailService,
+    private readonly outbox: EmailOutboxService,
     private readonly confirmLockout: PasswordConfirmLockoutService,
     @Inject(APP_ENV) private readonly env: Env,
     @Inject(APP_FEATURES) private readonly features: Features,
@@ -554,7 +556,12 @@ export class UsersController {
     }
 
     if (emailChanging && this.features.accountSecurity && this.env.MAIL_TRANSPORT !== "none") {
-      inBackground(() => this.accountMail.sendVerificationEmail(updatedUser));
+      // Durable delivery for the verification link; the token-less notice to the previous
+      // address stays fire-and-forget (nothing single-use is at stake)
+      inBackground(async () => {
+        await this.outbox.enqueueOp(updatedUser.id, "email_verify");
+        this.outbox.kick();
+      });
       inBackground(() =>
         this.accountMail.sendEmailChangedNotice({ name: updatedUser.name, email: existingUser.email }),
       );

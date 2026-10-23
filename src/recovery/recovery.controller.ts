@@ -23,8 +23,8 @@ import { pseudonym } from "../common/utils/pii";
 import type { Env } from "../config/env";
 import { APP_ENV } from "../config/tokens";
 import { PrismaService } from "../database/prisma.service";
-import { AccountMailService } from "../mail/account-mail.service";
 import { AuthTokensService } from "../mail/auth-tokens.service";
+import { EmailOutboxService } from "../mail/email-outbox.service";
 import { RateLimit } from "../rate-limit/rate-limit.decorator";
 import { RateLimitService } from "../rate-limit/rate-limit.service";
 import { LoginLockoutService } from "../rate-limit/login-lockout.service";
@@ -53,7 +53,7 @@ export class RecoveryController {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly authTokens: AuthTokensService,
-    private readonly accountMail: AccountMailService,
+    private readonly outbox: EmailOutboxService,
     private readonly sessions: SessionsService,
     private readonly lockout: LoginLockoutService,
     private readonly confirmLockout: PasswordConfirmLockoutService,
@@ -97,13 +97,18 @@ export class RecoveryController {
       const user = await this.prisma.user.findUnique({ where: { email } });
       if (!user || user.deletedAt || user.isBlocked) return;
       if (!(await this.mayEmail("reset", email))) return;
-      await this.accountMail.sendPasswordResetEmail(user);
-      await this.audit.record(req, {
-        userId: user.id,
-        action: "PASSWORD_RESET_REQUESTED",
-        entity: "User",
-        entityId: user.id,
-      });
+      // Durable: intent + audit commit together; the worker owns the actual delivery
+      // (the response above never depends on any of this, keeping answers indistinguishable)
+      await this.prisma.$transaction([
+        this.outbox.enqueueOp(user.id, "password_reset"),
+        this.audit.recordOp(req, {
+          userId: user.id,
+          action: "PASSWORD_RESET_REQUESTED",
+          entity: "User",
+          entityId: user.id,
+        }),
+      ]);
+      this.outbox.kick();
     });
 
     return { message: "If an account exists for that email, a reset link has been sent.", data: null };
@@ -211,13 +216,17 @@ export class RecoveryController {
       const user = await this.prisma.user.findUnique({ where: { email } });
       if (!user || user.deletedAt || user.isBlocked || user.emailVerifiedAt) return;
       if (!(await this.mayEmail("verify", email))) return;
-      await this.accountMail.sendVerificationEmail(user);
-      await this.audit.record(req, {
-        userId: user.id,
-        action: "VERIFICATION_EMAIL_RESENT",
-        entity: "User",
-        entityId: user.id,
-      });
+      // Durable intent + audit in one transaction; delivery belongs to the worker
+      await this.prisma.$transaction([
+        this.outbox.enqueueOp(user.id, "email_verify"),
+        this.audit.recordOp(req, {
+          userId: user.id,
+          action: "VERIFICATION_EMAIL_RESENT",
+          entity: "User",
+          entityId: user.id,
+        }),
+      ]);
+      this.outbox.kick();
     });
 
     return { message: "If the account exists and is not verified, a new link has been sent.", data: null };

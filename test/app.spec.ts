@@ -238,6 +238,37 @@ describe("app: HTTP infrastructure over the real surface", () => {
     });
   });
 
+  describe("durable email outbox (item 10)", () => {
+    it("registration queues the verification mail and the worker delivers it", async () => {
+      const email = `outbox-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
+      const res = await http()
+        .post("/api/auth/register")
+        .send({ name: "Outbox Test", email, password: "Password123!" })
+        .expect(201);
+      const userId = res.body.data.id as string;
+
+      // The response must not wait for delivery; the row is persisted and the worker
+      // (kicked in the background) delivers it through the configured transport
+      const prisma = app.get(PrismaService);
+      let row: Awaited<ReturnType<typeof prisma.emailOutbox.findFirst>> = null;
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline) {
+        row = await prisma.emailOutbox.findFirst({ where: { userId } });
+        if (row?.status === "sent" || row?.status === "failed") break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+
+      expect(row).not.toBeNull();
+      const delivered = row as NonNullable<typeof row>;
+      expect(delivered.status).toBe("sent"); // MAIL_TRANSPORT=log (dev mailbox) accepts it
+      expect(delivered.attempts).toBe(0);
+      expect(delivered.lastError).toBeNull();
+      // Raw tokens never live in the outbox: the schema only carries the delivery intent
+      expect(Object.keys(delivered)).not.toContain("token");
+      expect(Object.keys(delivered)).not.toContain("tokenHash");
+    });
+  });
+
   describe("OpenAPI + Scalar", () => {
     it("/openapi.json es un documento OpenAPI 3 válido con BearerAuth y la superficie real", async () => {
       const res = await http().get("/openapi.json").expect(200);

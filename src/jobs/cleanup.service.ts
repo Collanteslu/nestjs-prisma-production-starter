@@ -13,6 +13,7 @@ export interface CleanupCounts {
   deletedTokens: number;
   deletedBuckets: number;
   deletedAuditLogs: number;
+  deletedOutbox: number;
 }
 
 /**
@@ -89,12 +90,22 @@ export class CleanupService {
               })
             ).count
           : 0;
+      // Terminal outbox rows (sent/failed) older than 30 days: delivery history for ops,
+      // kept briefly for inspection then purged like the other operational tables
+      const deletedOutbox = (
+        await this.prisma.emailOutbox.deleteMany({
+          where: {
+            status: { in: ["sent", "failed"] },
+            createdAt: { lt: new Date(now.getTime() - 30 * DAY_MS) },
+          },
+        })
+      ).count;
 
-      if (sessionsRes.count > 0 || tokensRes.count > 0 || deletedAuditLogs > 0) {
+      if (sessionsRes.count > 0 || tokensRes.count > 0 || deletedAuditLogs > 0 || deletedOutbox > 0) {
         this.logger.log(
           `Cleanup routine purged expired sessions, tokens and old audit entries ` +
             `(sessions=${sessionsRes.count}, tokens=${tokensRes.count}, ` +
-            `buckets=${deletedBuckets}, auditLogs=${deletedAuditLogs})`,
+            `buckets=${deletedBuckets}, auditLogs=${deletedAuditLogs}, outbox=${deletedOutbox})`,
         );
       }
 
@@ -103,10 +114,17 @@ export class CleanupService {
         deletedTokens: tokensRes.count,
         deletedBuckets,
         deletedAuditLogs,
+        deletedOutbox,
       };
     } catch (error) {
       this.logger.error(`Error during session cleanup routine: ${String(error)}`);
-      return { deletedSessions: 0, deletedTokens: 0, deletedBuckets: 0, deletedAuditLogs: 0 };
+      return {
+        deletedSessions: 0,
+        deletedTokens: 0,
+        deletedBuckets: 0,
+        deletedAuditLogs: 0,
+        deletedOutbox: 0,
+      };
     }
   }
 

@@ -10,6 +10,7 @@ import { PrismaService } from "./database/prisma.service";
 import { SeedService } from "./database/seed.service";
 import { assertMigrationsUpToDate } from "./database/migrations-guard";
 import { CleanupService } from "./jobs/cleanup.service";
+import { EmailOutboxService } from "./mail/email-outbox.service";
 
 /**
  * LOG_LEVEL (trace…fatal|silent, the same vocabulary the reference uses for its logger)
@@ -76,8 +77,15 @@ async function bootstrap(): Promise<void> {
   // Recurring cleanup job (initial non-blocking cycle + hourly unref'd timer), like the reference
   const cleanup = app.get(CleanupService);
   cleanup.start();
+  // Durable email worker: polls the outbox and delivers with bounded retries. Only exists
+  // when the recovery flows do (AUTH_MODE=full); pending rows survive restarts either way.
+  const outbox = features.accountSecurity ? app.get(EmailOutboxService) : undefined;
+  outbox?.start();
 
-  installShutdownHooks(app, cleanup);
+  installShutdownHooks(app, () => {
+    cleanup.stop();
+    outbox?.stop();
+  });
 
   await app.listen(env.PORT, "0.0.0.0");
   Logger.log(`Application is running on: ${await app.getUrl()}`, "Bootstrap");
@@ -87,10 +95,10 @@ async function bootstrap(): Promise<void> {
  * Graceful shutdown: close the HTTP server and disconnect Prisma; if the process is
  * still alive after 10s, force the exit (same policy as the reference).
  */
-function installShutdownHooks(app: INestApplication, cleanup: CleanupService): void {
+function installShutdownHooks(app: INestApplication, stopJobs: () => void): void {
   const shutdown = (signal: NodeJS.Signals) => () => {
     Logger.log(`Received ${signal}: closing application...`, "Shutdown");
-    cleanup.stop();
+    stopJobs();
     const forceExit = setTimeout(() => {
       Logger.error("Could not close gracefully in 10s: forcing exit", "Shutdown");
       process.exit(1);

@@ -33,10 +33,10 @@ import { hashToken } from "../common/utils/hash-token";
 import type { Env, Features } from "../config/env";
 import { APP_ENV, APP_FEATURES } from "../config/tokens";
 import { PrismaService } from "../database/prisma.service";
-import { AccountMailService } from "../mail/account-mail.service";
 import { RateLimit } from "../rate-limit/rate-limit.decorator";
 import { LoginLockoutService } from "../rate-limit/login-lockout.service";
 import { MfaService } from "../mfa/mfa.service";
+import { EmailOutboxService } from "../mail/email-outbox.service";
 import { SessionsService } from "../sessions/sessions.service";
 import type { RefreshTokenPayload } from "./auth.types";
 import {
@@ -57,7 +57,7 @@ export class AuthController {
     private readonly lockout: LoginLockoutService,
     private readonly mfa: MfaService,
     private readonly audit: AuditService,
-    private readonly accountMail: AccountMailService,
+    private readonly outbox: EmailOutboxService,
     @Inject(APP_ENV) private readonly env: Env,
     @Inject(APP_FEATURES) private readonly features: Features,
   ) {}
@@ -98,9 +98,14 @@ export class AuthController {
       entityId: newUser.id,
     });
 
-    // Email verification is part of AUTH_MODE=full only
+    // Email verification is part of AUTH_MODE=full only. The intent is persisted (and the
+    // worker delivers it with bounded retries) so a restart cannot silently drop the mail;
+    // the gate keeps the previous behaviour of not queueing when nothing can deliver.
     if (this.features.accountSecurity && this.env.MAIL_TRANSPORT !== "none") {
-      inBackground(() => this.accountMail.sendVerificationEmail(newUser));
+      inBackground(async () => {
+        await this.outbox.enqueueOp(newUser.id, "email_verify");
+        this.outbox.kick();
+      });
     }
 
     return { message: "Account registered successfully.", data: newUser };

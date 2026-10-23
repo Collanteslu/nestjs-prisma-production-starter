@@ -31,6 +31,7 @@ model User {
   auditLogs     AuditLog[]
   authTokens    AuthToken[]
   recoveryCodes RecoveryCode[]
+  emailOutbox   EmailOutbox[]
 }
 
 /// Single-use tokens emailed to users (password reset, email verification). Stored only as SHA-256.
@@ -50,6 +51,31 @@ model AuthToken {
   @@index([expiresAt])
   // The cleanup job purges `expiresAt < now OR usedAt < now`: SQLite needs both branches indexed
   @@index([usedAt])
+}
+
+/// Durable outbox for account emails. A request only persists an intent (together with its
+/// audit entry); a worker delivers it with bounded retries, so a crash or an SMTP outage
+/// cannot silently swallow a message that was already acknowledged with 202. The single-use
+/// token is created AT DELIVERY TIME by the worker — raw tokens are never stored.
+model EmailOutbox {
+  id        String    @id @default(uuid())
+  userId    String
+  type      String // "password_reset" | "email_verify" (which AuthToken the delivery mints)
+  status    String    @default("pending") // "pending" (retryable) | "sending" | "sent" | "failed" (terminal)
+  attempts  Int       @default(0) // failed delivery attempts so far
+  nextAttemptAt DateTime @default(now()) // no attempt runs before this instant (backoff)
+  claimedAt DateTime? // set while a worker owns the row; stale claims are reclaimed
+  lastError String? // last delivery error (no message body, no tokens)
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The worker polls: (status, nextAttemptAt) is exactly its claim query
+  @@index([status, nextAttemptAt])
+  // Cleanup purges terminal rows older than the retention window by createdAt
+  @@index([createdAt])
+  @@index([userId])
 }
 
 /// One-time MFA recovery codes, stored only as SHA-256.
