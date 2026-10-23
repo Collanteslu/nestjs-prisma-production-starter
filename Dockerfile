@@ -3,7 +3,7 @@
 # ==========================================
 # Base fijada por digest (builds reproducibles, item 13): actualízala junto con un
 # smoke test de `docker run` (Dependabot propone el bump semanalmente)
-FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS builder
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS builder
 
 WORKDIR /app
 
@@ -29,7 +29,7 @@ RUN npm run build
 # ==========================================
 # Etapa 2: Imagen Final Ligera para Producción
 # ==========================================
-FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS runner
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS runner
 
 WORKDIR /app
 
@@ -38,8 +38,6 @@ ENV PORT=3011
 # Default database on the persistent volume (without this the app falls back to ./dev.db,
 # outside the volume, and the data is lost on every redeploy)
 ENV DATABASE_URL=file:/app/data/prod.db
-# The runner runs read-only (docker-compose): npx must keep its cache in the tmpfs /tmp
-ENV npm_config_cache=/tmp/.npm
 
 RUN apk add --no-cache openssl
 
@@ -62,6 +60,15 @@ RUN npm ci --omit=dev --ignore-scripts
 # deploy` necesita: se reconstruyen SOLO los paquetes de Prisma (scripts puntuales,
 # sin reactivar prepare/husky del resto de la instalación)
 RUN npm rebuild @prisma/engines prisma
+# El runtime solo necesita node: se elimina el toolchain npm. Además de reducir la
+# superficie, retira de la imagen las dependencias que npm vendoriza consigo mismo
+# (undici, brace-expansion… — con CVEs propios que Trivy detecta y que esta plantilla
+# no puede actualizar: son del npm de la imagen base). El entrypoint ejecuta la CLI de
+# Prisma con `node node_modules/prisma/build/index.js` (sin npx).
+USER root
+RUN rm -rf /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx
+USER node
 
 # Copiar el código compilado y el cliente generado de Prisma
 COPY --chown=node:node --from=builder /app/dist ./dist

@@ -5,7 +5,15 @@ import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "node_modules/**", "coverage/**", "contract/**", "prisma/migrations/**"],
+    ignores: [
+      "dist/**",
+      "node_modules/**",
+      "coverage/**",
+      "contract/**",
+      "prisma/migrations/**",
+      // Tercero vendorizado (nestjs-zod): código compilado upstream, no nuestro estilo
+      "vendor/**",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -38,6 +46,14 @@ export default tseslint.config(
   {
     files: ["**/*.mjs", "**/*.js"],
     ...tseslint.configs.disableTypeChecked,
+  },
+  {
+    // CLIs de soporte: node globals y la salida por consola ES el propósito
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { process: "readonly", console: "readonly", Buffer: "readonly" },
+    },
+    rules: { "no-console": "off" },
   },
   prettier,
 );

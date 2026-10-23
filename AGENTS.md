@@ -56,12 +56,18 @@ npm test                    # Jest: crea y migra su propia BD SQLite temporal
 Formatting is enforced by Prettier through Husky + lint-staged on every commit.
 
 CI (`.github/workflows/ci.yml`) runs the same list plus a Docker image build, a Trivy
-scan of that image (HIGH/CRITICAL with a fix available fail the job), the Jest suite
-with coverage floors for the security-critical files, and a `contract-parity` job that
-executes the contract harness in **each** `AUTH_MODE` (fresh migrated SQLite database,
-server boot with health check, mode's groups; the runner provides the SMTP sink for
-`recovery`). Actions are pinned by commit SHA and the base image by digest; Dependabot
-(`.github/dependabot.yml`) opens weekly PRs for npm, Docker and Actions updates.
+scan of that image (HIGH/CRITICAL with a fix available fail the job), a **CycloneDX
+SBOM** published as a build artifact, the Jest suite with coverage floors for the
+security-critical files, and a `contract-parity` job that executes the contract harness
+in **each** `AUTH_MODE` (fresh migrated SQLite database, server boot with health check,
+mode's groups; the runner provides the SMTP sink for `recovery`). Actions are pinned by
+commit SHA and the base image by digest; Dependabot (`.github/dependabot.yml`) opens
+weekly PRs for npm, Docker and Actions updates. **Image signing decision:** deferred on
+purpose — CI only builds the image locally and never pushes to a registry, so there is
+nothing to attest yet; when a registry is configured (ghcr.io or similar), add
+`cosign sign --yes` with GitHub OIDC keyless identity and make deploy verify with
+`cosign verify`. Until then the integrity chain is: digest-pinned base, SHA-pinned
+actions, `npm audit`, Trivy gate and the SBOM artifact.
 Tests create and migrate their own temporary SQLite database (`test/setup-env.ts` +
 the `beforeAll` of `test/app.spec.ts`), so `dev.db` is never touched.
 `npm run test:e2e` (`test-api.sh`) is an optional curl suite against a running dev
@@ -148,6 +154,29 @@ Express can only distinguish the real client when the trust configuration matche
    process terminates TLS itself, Helmet already sends `Strict-Transport-Security` with
    its default max-age — verify which one applies in your topology and keep exactly one
    authoritative issuer.
+6. **Reference configuration** (nginx, TLS at the proxy, API bound to localhost only):
+
+   ```nginx
+   server {
+     listen 443 ssl;
+     server_name api.example.com;
+     # ssl_certificate … (emite HSTS aquí, con header Strict-Transport-Security)
+     location / {
+       proxy_pass http://127.0.0.1:3011;
+       proxy_set_header Host $host;
+       # SOBRESCRIBE la cabecera: la del cliente nunca se reenvía.
+       # ($proxy_add_x_forwarded_for también es seguro con TRUST_PROXY_HOPS=1,
+       #  porque la API confía solo en la última entrada — la que añade el proxy.)
+       proxy_set_header X-Forwarded-For $remote_addr;
+       proxy_set_header X-Forwarded-Proto $scheme;
+     }
+   }
+   ```
+
+   Traefik: `forwardedHeaders.strategy: Host` (o `insecure: false` con sus IPs de
+   confianza) reescribe las cabeceras del cliente; Caddy lo hace por defecto. Whatever
+   the proxy: the app sets `TRUST_PROXY=true` + `TRUST_PROXY_HOPS` to ITS hop count
+   only, and step 4's verification is executed against that deployment.
 
 ## Security decisions and trade-offs (audit log)
 
@@ -161,7 +190,9 @@ Deliberate choices inherited from the reference and kept, with their compensatio
   (no operator action; the clock restarts on each failure), engagement is logged as a
   `WARN` line with a pseudonymous account reference for alerting, and the raw addresses
   never appear in logs. Recovery options for a locked user: wait out the window, or an
-  operator clears the `RateLimitBucket` row (the key is `lockout:<pseudonym>`).
+  operator computes the bucket key with `node --env-file=.env scripts/lockout-key.mjs
+  <email>` (the tool is pinned to `pii.ts` by test) and clears that `RateLimitBucket`
+  row.
   Progressive backoffs were evaluated and rejected for now: they would diverge from the
   reference's contract and complicate the deterministic tests for marginal gain at a
   15-minute bound.
@@ -301,6 +332,13 @@ this repository: keep the collection in sync by hand.
 
 ## Operation and security runbooks
 
+> Every procedure below has been **rehearsed in an isolated environment** with
+> `scripts/ops-rehearsal.sh` (scratch databases in tmpdir, ports 3913/3914 — never
+> touches `dev.db` or the parity databases). A runbook is not "documented", it is
+> `scripts/ops-rehearsal.sh <mode>` exiting 0: re-run it after changing the procedure.
+> The rehearsals have caught real issues (anti-replay vs. TOTP steps; WAL not included
+> in a naive file copy) — treat those lessons as part of the procedure.
+
 - **Rotate `JWT_SECRET` / `JWT_REFRESH_SECRET`**: both are HS256 signing keys; rotating
   either invalidates the corresponding tokens immediately — access tokens die at once,
   refresh tokens at rotation, so every session re-authenticates. Procedure: generate two
@@ -308,8 +346,8 @@ this repository: keep the collection in sync by hand.
   one for both), announce the forced re-login, and verify `/api/auth/login` +
   `/api/auth/refresh` afterwards. Rate-limit/lockout pseudonyms are keyed with
   `JWT_SECRET` too, so their counters reset (harmless, short-lived).
-- **Rotate the MFA encryption key (versioned)**: `MFA_ENCRYPTION_KEY` is required in
-  production with `AUTH_MODE=full`. To rotate without locking anyone out:
+- **Rotate the MFA encryption key (versioned)** — rehearsed as
+  `scripts/ops-rehearsal.sh mfa-rotation`:
   1. Generate a new key and move the current value to `MFA_ENCRYPTION_KEY_PREVIOUS`
      (decryption-only) before setting the new one as `MFA_ENCRYPTION_KEY`.
   2. Restart every instance. Secrets keep decrypting (previous key accepted) and are
@@ -319,21 +357,108 @@ this repository: keep the collection in sync by hand.
      remove `MFA_ENCRYPTION_KEY_PREVIOUS`. NEVER rotate `JWT_SECRET` as a substitute:
      when no dedicated key is set, TOTP secrets derive from it and rotating it makes
      every authenticator undecryptable.
+  The rehearsal proves all three properties end-to-end: enroll under K1 → TOTP login
+  with K1-as-previous → TOTP login with ONLY K2 (i.e. the lazy re-encryption happened).
 - **Revoke sessions**: users do it themselves (`DELETE /api/sessions/:id`,
   `POST /api/sessions/revoke-all`); admins use `POST /api/users/:id/revoke-sessions`;
   password reset and admin MFA reset revoke the target account's sessions inside the
   same transaction. A blocked user's sessions die at block time.
-- **Backups**: SQLite — copy the `*.db` file (plus `-wal`/`-shm` after a checkpoint)
-  from the `sqlite_data` volume or the host path with the API running or stopped, and
-  encrypt the archive at rest; Turso — use its point-in-time recovery/backups and store
-  `TURSO_AUTH_TOKEN` in your secret manager. **Restores must be rehearsed**: restore
-  into a scratch location, boot the API against it with `AUTH_MODE` matching, run
-  `npx prisma migrate diff --from-migrations … --exit-code` and the contract `system`
-  group, and confirm demo/production rows are present. Schedule the rehearsal; an
-  untested backup is not a backup.
-- **Alert on the security log lines**: `Account lockout engaged…` (item 4),
-  `Rate limit store unavailable…` and `Email delivery abandoned…` (items 5 and 10) are
-  structured one-liners meant for log-based alerting.
+- **Backups (encrypted) and restore** — rehearsed as
+  `scripts/ops-rehearsal.sh backup-restore`:
+  1. Snapshot the live database with **`VACUUM INTO '<file>'`** (via `@libsql/client`):
+     a consistent single file **including the WAL** — copying the `*.db` alone silently
+     loses recent commits still in `-wal` (the rehearsal proved it). Equally valid:
+     checkpoint first or copy `*.db` + `*.db-wal` + `*.db-shm` together.
+  2. Encrypt at rest with an **authenticated** tool — `age`
+     (`age -r "$recipient" -o backup.db.enc snapshot.db`, ChaCha20-Poly1305 AEAD).
+     Do **not** use `openssl enc`: it is CBC without authentication (it provides no
+     integrity) and it does not support authenticated modes such as GCM — so if you ever
+     fall back to OpenSSL you must add a MAC over the ciphertext (OWASP Cryptographic
+     Storage Cheat Sheet; `openssl-enc(1)`). With age, tampering fails decryption, which
+     the rehearsal asserts explicitly (a flipped byte must be rejected).
+  3. **Key handling**: `age-keygen` once per environment; the secret key lives in the
+     secret manager (or a mode-0600 file / protected descriptor on the host) and is
+     passed **by file** — `age -d -i /run/secrets/backup.key …` — never as a process
+     argument or environment variable (both are visible in `ps`/crash logs). The
+     rehearsal generates its throwaway key inside the scratch directory.
+  4. Turso: use its point-in-time recovery; store `TURSO_AUTH_TOKEN` in the secret
+     manager.
+  5. **Restore into a scratch location** and prove it: boot the API against it with the
+     matching `AUTH_MODE`, run `npx prisma migrate diff --from-migrations … --exit-code`,
+     confirm data (login of a pre-backup user) and run the contract `system` group —
+     exactly what the rehearsal script asserts. Schedule the rehearsal; an untested
+     backup is not a backup.
+- **Deployment secrets**: source of truth is the platform's secret store — host `.env`
+  (mode 0600, gitignored; `.env.example` documents keys with values blank), Docker
+  `--env-file`/secrets or an orchestrator's secret store (compose reads JWT_*/MFA_* from
+  the environment and refuses to start without them), CI values as **repository
+  secrets** (the contract's JWT values in `.github/workflows/ci.yml` are throwaway test
+  fixtures, never production secrets), cloud secret manager for Turso tokens. Secrets
+  never enter images, logs, the repo, or Bruno files (runtime variables only).
+- **Alert on the security log lines**: every hook below is a structured one-liner
+  (level shown), matched with log-based alerting — no metrics endpoint is exposed on
+  purpose, so the HTTP surface stays contract-identical:
+
+  | Pattern | Level | Condition | Severity | Response |
+  |---|---|---|---|---|
+  | `Rate limit store unavailable` | ERROR | 1× | page | DB incident. With `RATE_LIMIT_ON_DB_FAILURE=local` the credential routes stay covered per-process and the rest fails open; check the DB, then `RateLimitGuard.metrics` (`storeFailures`, `localAllowed`, `localBlocked`, `openAllowed`) |
+  | `Account lockout engaged` | WARN | ≥5 distinct accounts / 10 min | warning | Credential stuffing or lockout abuse; correlate with per-IP 429s. Affected users self-heal within `LOGIN_LOCKOUT_MINUTES`; support locates/clears the row with `node --env-file=.env scripts/lockout-key.mjs <email>` |
+  | `Email delivery failed (attempt` | WARN | ≥3 / 10 min | warning | SMTP degrading; watch for abandonments |
+  | `Email delivery abandoned` | ERROR | 1× | page | A user will never receive the message: inspect `EmailOutbox` (`status=failed`, `lastError`), fix the transport; the user re-requests the link |
+  | `Email retired without delivery` | WARN | ≥5 / 10 min | warning | `MAIL_TRANSPORT=none` or undeliverable accounts — a misconfiguration if unintended |
+  | `Failed to persist audit log entry` | ERROR | 1× | page (compliance) | Audit gap: check DB writability; entries are lost until it recovers |
+  | `Email outbox drain failed` | ERROR | 1× | page | The delivery worker is broken — pending emails stall |
+
+  In-process counters exist for probes and tests and are deliberately not HTTP-exposed
+  (contract parity): `RateLimitGuard.metrics` and `EmailOutboxService.metrics`
+  (`enqueued`, `sent`, `retried`, `failed`).
+
+- **Routes protected locally when the store fails** (`RATE_LIMIT_ON_DB_FAILURE=local`,
+  the default): the authoritative list is `CRITICAL_RATE_LIMITS` in
+  `src/rate-limit/rate-limit.decorator.ts` — `login`, `refresh`, `register`,
+  `forgot-password`, `reset-password`, `resend-verification`, `verify-email`, `mfa`
+  (the credential-stuffing and token-guessing surface). When you add a rate-limited
+  route that must survive an outage, add its name to that set — and to the alert rules
+  above if it deserves one.
+
+## Pre-production environment checklist (operational integration)
+
+The repository deliberately does not provision your stack's own pieces (secret store,
+proxy, SMTP provider, log pipeline) — they are environment-specific — but nothing below
+is optional before real data flows. The rehearsals prove the **procedures** in
+isolation; this checklist proves the **environment**. Record each item (date,
+environment, result) with the rollout.
+
+1. **Secrets**: provision `JWT_SECRET`, `JWT_REFRESH_SECRET`, `MFA_ENCRYPTION_KEY`,
+   SMTP credentials, `TURSO_*` and the age backup key in the real store (host `.env`
+   mode 0600, orchestrator secrets, cloud KMS). Verify: the app boots in production
+   mode, `git grep <valor>` finds nothing, and a secret scan of the delivered image
+   (`trivy image --scanners secret`) is clean.
+2. **Proxy**: deploy the reference configuration (step 6 under *Proxy deployments*)
+   with the real proxy, set `TRUST_PROXY`/`TRUST_PROXY_HOPS` to the real hop count, run
+   the forged-`X-Forwarded-For` verification **from outside** and confirm exactly one
+   HSTS issuer for the domain.
+3. **SMTP**: point `SMTP_URL` at the real provider with production settings
+   (`smtps://`, or `smtp://` + STARTTLS — TLS is forced by the app), send a real
+   `forgot-password` to a mailbox you own and consume the link end-to-end; confirm the
+   provider refuses plaintext (the fallback must fail, not downgrade). Align
+   SPF/DKIM/DMARC with `MAIL_FROM`.
+4. **Remote backups**: schedule the `VACUUM INTO` + `age` pipeline with the store's key,
+   upload off-host, and **restore from the remote copy** running the same assertions as
+   `scripts/ops-rehearsal.sh backup-restore` (`migrate diff`, login of a pre-backup
+   user, contract `system` group). For Turso, execute the point-in-time-restore drill
+   once.
+5. **Alerts on a real provider**: the table under *Operation and security runbooks* is
+   the source of truth (patterns, thresholds, severities) — provision those rules in
+   your log pipeline. Example for Grafana/Loki:
+   `sum(count_over_time({app="nestjs-api"} |= "Email delivery abandoned" [5m])) > 0` →
+   page; for Datadog, a log-monitor matching the same patterns with the same severity.
+   The in-process counters (`RateLimitGuard.metrics`, `EmailOutboxService.metrics`) are
+   available for an exporter if you need gauges — expose it on an internal port/flag so
+   the public contract surface stays untouched.
+6. **Image signing**: stays deferred while CI only builds and never pushes (decision in
+   the CI section); enable cosign keyless (GitHub OIDC) the day images land in a
+   registry and make deploys verify them.
 
 ## Useful files
 

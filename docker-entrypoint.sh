@@ -12,9 +12,11 @@ case "$DATABASE_URL" in
     ;;
 esac
 
-# Aplicar migraciones versionadas (nunca "db push" en producción)
+# Aplicar migraciones versionadas (nunca "db push" en producción). Sin toolchain npm en
+# la imagen: la CLI de Prisma se ejecuta directamente con node.
+PRISMA="node node_modules/prisma/build/index.js"
 echo "🚀 Aplicando migraciones de base de datos..."
-if ! OUTPUT=$(npx prisma migrate deploy 2>&1); then
+if ! OUTPUT=$($PRISMA migrate deploy 2>&1); then
   echo "$OUTPUT"
   # El baseline NUNCA es automático: si el esquema existente no coincide con el esperado,
   # atribuirle 0_init como "ya aplicada" le asignaría un historial falso. El baseline es una
@@ -26,9 +28,9 @@ if ! OUTPUT=$(npx prisma migrate deploy 2>&1); then
   fi
   echo "     1. Copia de seguridad del fichero/BD actual."
   echo "     2. Verificar que el esquema existente es el esperado, p. ej.:"
-  echo "        npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema prisma/schema.prisma"
-  echo "     3. Solo si el esquema coincide:  npx prisma migrate resolve --applied 0_init"
-  echo "     4. npx prisma migrate deploy"
+  echo "        node node_modules/prisma/build/index.js migrate diff --from-schema-datasource prisma/schema.prisma --to-schema prisma/schema.prisma"
+  echo "     3. Solo si el esquema coincide:  node node_modules/prisma/build/index.js migrate resolve --applied 0_init"
+  echo "     4. node node_modules/prisma/build/index.js migrate deploy"
   echo "   Nunca ejecutes resolve en un esquema que no hayas verificado."
   exit 1
 fi
