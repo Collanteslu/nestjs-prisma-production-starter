@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# …pero el dist vendorizado de nestjs-zod es código fuente de esta plantilla, no build
+!vendor/nestjs-zod/dist/
 coverage/
 *.log
 *.tsbuildinfo
