@@ -12,6 +12,18 @@ export interface MailMessage {
 }
 
 /**
+ * Nodemailer options for the configured environment. In production TLS is MANDATORY:
+ * `smtps://` delivers over implicit TLS, and plain `smtp://` (the usual submission port
+ * 587) is forced to upgrade with STARTTLS — nodemailer then refuses to send in
+ * plaintext, and the env validation rejects URLs that disable certificate verification
+ * (`ignoreTLS=true`, `rejectUnauthorized=false`). Outside production no option is set so
+ * local/dev plaintext sinks (the contract harness on :2525) keep working.
+ */
+export function smtpTransportOptions(env: Env): { requireTLS?: boolean } {
+  return env.NODE_ENV === "production" ? { requireTLS: true } : {};
+}
+
+/**
  * Pluggable outgoing mail. The transport is chosen with MAIL_TRANSPORT:
  * - `none`   : nothing is sent (default in production until SMTP is configured)
  * - `log`    : development mailbox — the message is written to stdout (it contains the
@@ -67,6 +79,7 @@ export class MailService {
         case "smtp":
           this.smtp ??= (await import("nodemailer")).default.createTransport(
             this.env.SMTP_URL,
+            smtpTransportOptions(this.env),
           );
           await this.smtp.sendMail({ from: this.env.MAIL_FROM, ...message });
           return true;

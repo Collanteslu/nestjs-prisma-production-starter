@@ -1,4 +1,5 @@
 import { EnvValidationError, parseEnv } from "../src/config/env";
+import { smtpTransportOptions } from "../src/mail/mail.service";
 
 /**
  * Startup guards added by the security review: production must refuse configurations that
@@ -95,6 +96,53 @@ describe("env guards (fail-fast configuration)", () => {
         CORS_ORIGINS: "https://app.example.com",
       });
       expect(env.CORS_ORIGINS).toEqual(["https://app.example.com"]);
+    });
+  });
+
+  describe("SMTP requires TLS in production (step 1)", () => {
+    const withSmtp = (url: string) => ({
+      ...production,
+      AUTH_MODE: "basic", // no APP_URL requirement; the URL rules apply to any mode
+      MAIL_TRANSPORT: "smtp",
+      SMTP_URL: url,
+    });
+
+    it("accepts implicit TLS (smtps://) and plain submission (smtp://, forced to upgrade)", () => {
+      expect(parseEnv(withSmtp("smtps://user:pass@mail.example.com:465")).MAIL_TRANSPORT).toBe(
+        "smtp",
+      );
+      expect(parseEnv(withSmtp("smtp://mail.example.com:587")).MAIL_TRANSPORT).toBe("smtp");
+    });
+
+    it("rejects URLs that disable TLS verification", () => {
+      expectRejected(
+        withSmtp("smtp://mail.example.com:587?ignoreTLS=true"),
+        "SMTP_URL",
+        /disables TLS verification/,
+      );
+      expectRejected(
+        withSmtp("smtps://mail.example.com:465?rejectUnauthorized=false"),
+        "SMTP_URL",
+        /disables TLS verification/,
+      );
+    });
+
+    it("rejects a non-SMTP scheme or a malformed URL", () => {
+      expectRejected(withSmtp("http://mail.example.com:25"), "SMTP_URL", /smtp:\/\/ or smtps:\/\//);
+      expectRejected(withSmtp("not a url"), "SMTP_URL", /valid URL/);
+    });
+
+    it("forces requireTLS only in production (local plaintext sinks keep working)", () => {
+      expect(smtpTransportOptions(parseEnv(withSmtp("smtp://127.0.0.1:2525")))).toEqual({
+        requireTLS: true,
+      });
+      const dev = parseEnv({
+        NODE_ENV: "development",
+        AUTH_MODE: "none",
+        MAIL_TRANSPORT: "smtp",
+        SMTP_URL: "smtp://127.0.0.1:2525",
+      });
+      expect(smtpTransportOptions(dev)).toEqual({});
     });
   });
 

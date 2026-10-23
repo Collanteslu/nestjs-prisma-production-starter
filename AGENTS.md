@@ -205,6 +205,13 @@ Deliberate choices inherited from the reference and kept, with their compensatio
   with the token in the query). Prefer a page served from your own origin.
 - **Logging (item 1).** `MAIL_TRANSPORT=log` is development-only and rejected in
   production; no logger records message bodies or tokens — only subject and errors.
+- **SMTP requires TLS in production.** The startup guard rejects malformed `SMTP_URL`s,
+  non-`smtp(s)` schemes and URLs that disable verification (`ignoreTLS=true`,
+  `rejectUnauthorized=false`); the nodemailer transport additionally sets `requireTLS`
+  in production, so `smtp://` (submission, port 587) must upgrade with STARTTLS and
+  `smtps://` (465) uses implicit TLS — a plaintext-only server fails to send rather
+  than downgrade. Outside production no TLS is forced (local sinks, the contract
+  harness on :2525).
 
 ## Personal data in logs and keys (item 9)
 

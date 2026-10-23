@@ -195,6 +195,41 @@ export const envSchema = z
           "MAIL_TRANSPORT=log is development-only: in production it would write password-reset and verification tokens to the log stream. Use MAIL_TRANSPORT=smtp.",
       });
     }
+    // TLS is mandatory for SMTP in production: a valid smtp(s) URL, and no query option
+    // able to weaken the channel (the transport additionally forces `requireTLS`, so a
+    // server without STARTTLS fails to send instead of falling back to plaintext)
+    if (cfg.MAIL_TRANSPORT === "smtp") {
+      let smtpUrl: URL | undefined;
+      try {
+        smtpUrl = new URL(cfg.SMTP_URL ?? "");
+      } catch {
+        ctx.addIssue({
+          code: "custom",
+          path: ["SMTP_URL"],
+          message:
+            "SMTP_URL must be a valid URL in production (e.g. smtps://user:pass@smtp.example.com:465)",
+        });
+      }
+      if (smtpUrl && !["smtp:", "smtps:"].includes(smtpUrl.protocol)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["SMTP_URL"],
+          message: "SMTP_URL must use the smtp:// or smtps:// scheme",
+        });
+      }
+      if (
+        smtpUrl &&
+        (smtpUrl.searchParams.get("ignoreTLS") === "true" ||
+          smtpUrl.searchParams.get("rejectUnauthorized") === "false")
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["SMTP_URL"],
+          message:
+            "SMTP_URL disables TLS verification (ignoreTLS/rejectUnauthorized): not allowed in production",
+        });
+      }
+    }
     // Without a dedicated key the TOTP secrets are encrypted with a key derived from
     // JWT_SECRET: rotating the JWT secret would make every enrolled authenticator
     // undecryptable and lock users out of their 2FA (OWASP Secrets Management: keys need
