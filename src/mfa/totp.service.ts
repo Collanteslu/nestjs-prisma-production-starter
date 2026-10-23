@@ -122,12 +122,21 @@ export class TotpService {
 
   // --- Secret encryption at rest -----------------------------------------------------------
 
+  /** Key used to ENCRYPT (always the current one) */
   private encryptionKey(): Buffer {
     const material = this.env.MFA_ENCRYPTION_KEY ?? this.env.JWT_SECRET;
     return Buffer.from(hkdfSync("sha256", material, "", "mfa-secret-encryption", 32));
   }
 
-  /** Encrypts a secret as `v1.<iv>.<tag>.<ciphertext>` (base64url) */
+  /** Key being replaced during a rotation: accepted for DECRYPTION only */
+  private previousEncryptionKey(): Buffer | undefined {
+    if (!this.env.MFA_ENCRYPTION_KEY_PREVIOUS) return undefined;
+    return Buffer.from(
+      hkdfSync("sha256", this.env.MFA_ENCRYPTION_KEY_PREVIOUS, "", "mfa-secret-encryption", 32),
+    );
+  }
+
+  /** Encrypts a secret as `v1.<iv>.<tag>.<ciphertext>` (base64url), always with the current key */
   encryptSecret(plain: string): string {
     const iv = randomBytes(12);
     const cipher = createCipheriv("aes-256-gcm", this.encryptionKey(), iv);
@@ -137,19 +146,41 @@ export class TotpService {
       .join(".");
   }
 
-  decryptSecret(stored: string): string {
+  /**
+   * Decrypts with the current key first and, while a rotation is in progress, with
+   * MFA_ENCRYPTION_KEY_PREVIOUS. `fromPreviousKey` tells callers the stored value should be
+   * re-encrypted with the current key (lazy migration, see MfaService.verifyUserTotp).
+   */
+  decryptSecretWithSource(stored: string): { secret: string; fromPreviousKey: boolean } {
     const [version, iv, tag, data] = stored.split(".");
     if (version !== "v1" || !iv || !tag || !data) throw new Error("Unsupported secret format");
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      this.encryptionKey(),
-      Buffer.from(iv, "base64url"),
-    );
-    decipher.setAuthTag(Buffer.from(tag, "base64url"));
-    return Buffer.concat([
-      decipher.update(Buffer.from(data, "base64url")),
-      decipher.final(),
-    ]).toString("utf8");
+
+    const open = (key: Buffer): string | undefined => {
+      try {
+        const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64url"));
+        decipher.setAuthTag(Buffer.from(tag, "base64url"));
+        return Buffer.concat([
+          decipher.update(Buffer.from(data, "base64url")),
+          decipher.final(),
+        ]).toString("utf8");
+      } catch {
+        return undefined; // authentication-tag mismatch: this key did not encrypt the value
+      }
+    };
+
+    const current = open(this.encryptionKey());
+    if (current !== undefined) return { secret: current, fromPreviousKey: false };
+
+    const previous = this.previousEncryptionKey();
+    if (previous) {
+      const decrypted = open(previous);
+      if (decrypted !== undefined) return { secret: decrypted, fromPreviousKey: true };
+    }
+    throw new Error("Unable to decrypt TOTP secret: no configured MFA key matches");
+  }
+
+  decryptSecret(stored: string): string {
+    return this.decryptSecretWithSource(stored).secret;
   }
 
   // --- Recovery codes -----------------------------------------------------------------------

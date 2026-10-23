@@ -49,6 +49,11 @@ export const envSchema = z
       .string()
       .optional()
       .transform((val) => (val === undefined ? undefined : val === "true" || val === "1")),
+    // Explicit opt-in for a wildcard ("*") CORS origin. Rejected in production unless true.
+    CORS_ALLOW_WILDCARD: z
+      .string()
+      .optional()
+      .transform((val) => val === "true" || val === "1"),
     LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
     REFRESH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
     REGISTER_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
@@ -77,8 +82,12 @@ export const envSchema = z
       .string()
       .optional()
       .transform((val) => val === "true" || val === "1"),
-    // Key encrypting TOTP secrets at rest (defaults to a key derived from JWT_SECRET)
+    // Key encrypting TOTP secrets at rest (defaults to a key derived from JWT_SECRET).
+    // Required in production with AUTH_MODE=full (see superRefine below).
     MFA_ENCRYPTION_KEY: z.string().min(32).optional(),
+    // Previous encryption key: set it while rotating MFA_ENCRYPTION_KEY so already-enrolled
+    // secrets keep decrypting; only used for decryption, never to encrypt new secrets.
+    MFA_ENCRYPTION_KEY_PREVIOUS: z.string().min(32).optional(),
     MFA_ISSUER: z.string().default("NestJS API"),
     LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).optional(),
     // Seconds during which reusing a just-rotated refresh token is treated as a concurrent refresh
@@ -153,6 +162,14 @@ export const envSchema = z
         message: "JWT_REFRESH_SECRET must differ from JWT_SECRET",
       });
     }
+    if (cfg.MFA_ENCRYPTION_KEY_PREVIOUS && !cfg.MFA_ENCRYPTION_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["MFA_ENCRYPTION_KEY_PREVIOUS"],
+        message:
+          "MFA_ENCRYPTION_KEY_PREVIOUS only works together with MFA_ENCRYPTION_KEY (it is the key being replaced during a rotation)",
+      });
+    }
     if (cfg.NODE_ENV !== "production") return;
     // Production hardening below
     if (cfg.MAIL_TRANSPORT === "memory") {
@@ -160,6 +177,39 @@ export const envSchema = z
         code: "custom",
         path: ["MAIL_TRANSPORT"],
         message: "MAIL_TRANSPORT=memory is for tests only",
+      });
+    }
+    // Password-reset and verification links embed single-use credentials: the log stream is
+    // often shipped to third parties and kept far longer than the process, so writing the
+    // message there would leak live tokens (OWASP Logging Cheat Sheet: never log secrets).
+    if (cfg.MAIL_TRANSPORT === "log") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["MAIL_TRANSPORT"],
+        message:
+          "MAIL_TRANSPORT=log is development-only: in production it would write password-reset and verification tokens to the log stream. Use MAIL_TRANSPORT=smtp.",
+      });
+    }
+    // Without a dedicated key the TOTP secrets are encrypted with a key derived from
+    // JWT_SECRET: rotating the JWT secret would make every enrolled authenticator
+    // undecryptable and lock users out of their 2FA (OWASP Secrets Management: keys need
+    // an explicit lifecycle independent from signing secrets).
+    if (fullAuth && !cfg.MFA_ENCRYPTION_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["MFA_ENCRYPTION_KEY"],
+        message:
+          "MFA_ENCRYPTION_KEY (>= 32 chars) is required in production with AUTH_MODE=full so TOTP secrets are encrypted with a dedicated, stable key (generate one with: openssl rand -base64 48)",
+      });
+    }
+    // A wildcard origin in production would expose the API to every site; require an
+    // explicit, documented decision instead of inheriting the development default.
+    if (cfg.CORS_ORIGINS.includes("*") && !cfg.CORS_ALLOW_WILDCARD) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["CORS_ORIGINS"],
+        message:
+          'CORS_ORIGINS="*" is rejected in production: list the real origins, or set CORS_ALLOW_WILDCARD=true to allow any origin deliberately',
       });
     }
     // Real account emails must not point at the localhost default (or at a plain-http page)

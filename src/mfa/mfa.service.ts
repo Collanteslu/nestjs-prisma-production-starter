@@ -23,20 +23,26 @@ export class MfaService {
   /**
    * Verifies a TOTP code for a user. A step is accepted at most once: the `totpLastStep` update is
    * a conditional single statement, so two concurrent requests cannot both use the same code.
+   * A secret still encrypted with MFA_ENCRYPTION_KEY_PREVIOUS is re-encrypted with the current
+   * key after a successful verification (lazy rotation, no maintenance window needed).
    */
   async verifyUserTotp(user: SecondFactorSubject, code: string): Promise<boolean> {
     if (!user.totpSecret) return false;
-    const step = this.totp.verifyTotp(
-      this.totp.decryptSecret(user.totpSecret),
-      code,
-      user.totpLastStep,
-    );
+    const { secret, fromPreviousKey } = this.totp.decryptSecretWithSource(user.totpSecret);
+    const step = this.totp.verifyTotp(secret, code, user.totpLastStep);
     if (step === null) return false;
     const claimed = await this.prisma.user.updateMany({
       where: { id: user.id, OR: [{ totpLastStep: null }, { totpLastStep: { lt: step } }] },
       data: { totpLastStep: step },
     });
-    return claimed.count === 1;
+    if (claimed.count !== 1) return false;
+    if (fromPreviousKey) {
+      // Best effort: the secret still decrypts either way; the next successful use retries
+      await this.prisma.user
+        .update({ where: { id: user.id }, data: { totpSecret: this.totp.encryptSecret(secret) } })
+        .catch(() => undefined);
+    }
+    return true;
   }
 
   /** Consumes a one-time recovery code (atomic: it works once) */

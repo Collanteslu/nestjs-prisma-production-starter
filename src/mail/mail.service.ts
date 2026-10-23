@@ -14,9 +14,15 @@ export interface MailMessage {
 /**
  * Pluggable outgoing mail. The transport is chosen with MAIL_TRANSPORT:
  * - `none`   : nothing is sent (default in production until SMTP is configured)
- * - `log`    : the message is printed to the log (development convenience; it contains the token)
+ * - `log`    : development mailbox — the message is written to stdout (it contains the
+ *              token). Env validation REJECTS this transport in production, and the
+ *              runtime check below refuses the body there even if validation is bypassed,
+ *              so a live token can never reach a shipped log stream.
  * - `smtp`   : delivered through SMTP_URL with nodemailer
  * - `memory` : kept in `outbox` (tests only)
+ *
+ * Logging policy (OWASP Logging Cheat Sheet): no logger call in this class ever records
+ * the message body or the tokens it embeds — only subject, recipient class and errors.
  */
 @Injectable()
 export class MailService {
@@ -44,8 +50,15 @@ export class MailService {
           this.logger.warn(`Mail transport disabled: message not sent (${message.subject})`);
           return false;
         case "log":
+          // Defense in depth behind the env validation: never write a message body in production
+          if (this.env.NODE_ENV === "production") {
+            this.logger.warn(
+              `MAIL_TRANSPORT=log refused in production; message not sent (${message.subject})`,
+            );
+            return false;
+          }
           this.logger.log(
-            `📧 Mail to=${message.to} subject=${message.subject}\n${message.text}`,
+            `📧 DEV MAILBOX to=${message.to} subject=${message.subject}\n${message.text}`,
           );
           return true;
         case "memory":
@@ -59,6 +72,7 @@ export class MailService {
           return true;
       }
     } catch (error) {
+      // Subject only: the body (which embeds single-use tokens) must never enter the logs
       this.logger.error(`Failed to send mail (${message.subject}): ${String(error)}`);
       return false;
     }

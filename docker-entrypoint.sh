@@ -16,18 +16,23 @@ esac
 echo "🚀 Aplicando migraciones de base de datos..."
 if ! OUTPUT=$(npx prisma migrate deploy 2>&1); then
   echo "$OUTPUT"
-  # P3005: base de datos existente creada con "db push" (versiones anteriores de la plantilla).
-  # Se marca la migración inicial como aplicada (baseline) y se aplican las siguientes.
+  # El baseline NUNCA es automático: si el esquema existente no coincide con el esperado,
+  # atribuirle 0_init como "ya aplicada" le asignaría un historial falso. El baseline es una
+  # operación EXPLÍCITA de mantenimiento, tras verificar el esquema y tomar copia de seguridad:
+  echo ""
+  echo "❌ No se aplicaron las migraciones."
   if echo "$OUTPUT" | grep -q "P3005"; then
-    echo "🧱 Base de datos existente sin historial de migraciones: aplicando baseline 0_init..."
-    npx prisma migrate resolve --applied 0_init
-    npx prisma migrate deploy
-  else
-    exit 1
+    echo "   La base de datos existe SIN historial de migraciones (P3005). Procedimiento manual:"
   fi
-else
-  echo "$OUTPUT"
+  echo "     1. Copia de seguridad del fichero/BD actual."
+  echo "     2. Verificar que el esquema existente es el esperado, p. ej.:"
+  echo "        npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema prisma/schema.prisma"
+  echo "     3. Solo si el esquema coincide:  npx prisma migrate resolve --applied 0_init"
+  echo "     4. npx prisma migrate deploy"
+  echo "   Nunca ejecutes resolve en un esquema que no hayas verificado."
+  exit 1
 fi
+echo "$OUTPUT"
 
 # Ejecutar el proceso principal
 echo "⚡ Iniciando servidor NestJS..."
