@@ -28,6 +28,7 @@ import { Public } from "../common/decorators/public.decorator";
 import { RetryAfterException } from "../common/exceptions/retry-after.exception";
 import { inBackground } from "../common/utils/background";
 import { comparePassword, getDummyHash, hashPassword } from "../common/utils/password";
+import { pseudonym } from "../common/utils/pii";
 import { hashToken } from "../common/utils/hash-token";
 import type { Env, Features } from "../config/env";
 import { APP_ENV, APP_FEATURES } from "../config/tokens";
@@ -160,7 +161,8 @@ export class AuthController {
         userId: user?.id ?? null,
         action: "LOGIN_FAILED",
         entity: "Session",
-        details: { email },
+        // Pseudonym, never the raw address: security logs must minimize personal data
+        details: { account: pseudonym(this.env.JWT_SECRET, email) },
       });
       throw new UnauthorizedException("Invalid credentials (incorrect email or password)");
     }
@@ -194,7 +196,7 @@ export class AuthController {
           userId: user.id,
           action: "LOGIN_FAILED",
           entity: "Session",
-          details: { email, reason: "invalid_second_factor" },
+          details: { account: pseudonym(this.env.JWT_SECRET, email), reason: "invalid_second_factor" },
         });
         throw new HttpException(
           { message: "Invalid two-factor code.", details: { code: "MFA_INVALID" } },

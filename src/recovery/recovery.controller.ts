@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   HttpCode,
+  Inject,
   Post,
   Req,
 } from "@nestjs/common";
@@ -18,6 +19,9 @@ import { AuditService } from "../audit/audit.service";
 import { Public } from "../common/decorators/public.decorator";
 import { hashPassword } from "../common/utils/password";
 import { inBackground } from "../common/utils/background";
+import { pseudonym } from "../common/utils/pii";
+import type { Env } from "../config/env";
+import { APP_ENV } from "../config/tokens";
 import { PrismaService } from "../database/prisma.service";
 import { AccountMailService } from "../mail/account-mail.service";
 import { AuthTokensService } from "../mail/auth-tokens.service";
@@ -54,11 +58,19 @@ export class RecoveryController {
     private readonly lockout: LoginLockoutService,
     private readonly confirmLockout: PasswordConfirmLockoutService,
     private readonly rateLimit: RateLimitService,
+    @Inject(APP_ENV) private readonly env: Env,
   ) {}
 
-  /** True while the address is under its hourly allowance for this kind of email */
+  /**
+   * True while the address is under its hourly allowance for this kind of email. The bucket
+   * key carries a pseudonym of the address, never the raw email: these keys are persisted
+   * (RateLimitBucket) and would otherwise duplicate PII outside the account table.
+   */
   private async mayEmail(kind: string, email: string): Promise<boolean> {
-    const bucket = await this.rateLimit.hit(`mail:${kind}:${email}`, 60 * 60_000);
+    const bucket = await this.rateLimit.hit(
+      `mail:${kind}:${pseudonym(this.env.JWT_SECRET, email)}`,
+      60 * 60_000,
+    );
     return bucket.count <= EMAILS_PER_ADDRESS_PER_HOUR;
   }
 

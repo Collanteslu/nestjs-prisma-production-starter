@@ -41,6 +41,7 @@ import { DetailQuery, IdParam, PermanentQuery } from "../common/dto/common.dtos"
 import { inBackground } from "../common/utils/background";
 import { buildPagination } from "../common/utils/pagination";
 import { comparePassword, hashPassword } from "../common/utils/password";
+import { pseudonym } from "../common/utils/pii";
 import { parseFilters, parseSorting } from "../common/utils/query";
 import { parseIncludes } from "../common/utils/relations";
 import type { Env, Features } from "../config/env";
@@ -248,7 +249,9 @@ export class UsersController {
       action: "CREATE",
       entity: "User",
       entityId: newUser.id,
-      details: { email, role },
+      // Pseudonym: audit details are retained for AUDIT_RETENTION_DAYS and must not
+      // duplicate the account list's personal data
+      details: { account: pseudonym(this.env.JWT_SECRET, email), role },
     });
 
     return { message: "User created successfully with hashed credentials.", data: newUser };
@@ -645,7 +648,7 @@ export class UsersController {
         action: "DELETE_PERMANENT",
         entity: "User",
         entityId: id,
-        details: { email: existingUser.email },
+        details: { account: pseudonym(this.env.JWT_SECRET, existingUser.email) },
       });
 
       return {

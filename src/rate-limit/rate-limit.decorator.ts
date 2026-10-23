@@ -25,5 +25,22 @@ export const RATE_LIMITS = {
 
 export type RateLimitName = keyof typeof RATE_LIMITS;
 
+/**
+ * Rates whose protection must survive an outage of the counter store when
+ * RATE_LIMIT_ON_DB_FAILURE=local (the default): authentication, recovery and MFA are the
+ * credential-stuffing/token-guessing surface — failing open there during an incident would
+ * silently disable the protection exactly when the system is under stress.
+ */
+export const CRITICAL_RATE_LIMITS = new Set<RateLimitName>([
+  "login",
+  "refresh",
+  "register",
+  "forgot-password",
+  "reset-password",
+  "resend-verification",
+  "verify-email",
+  "mfa",
+]);
+
 /** Applies the named DB-backed rate limiter to a route (reference middleware parity). */
 export const RateLimit = (name: RateLimitName) => SetMetadata(RATE_LIMIT_KEY, name);

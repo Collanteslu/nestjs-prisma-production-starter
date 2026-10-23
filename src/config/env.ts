@@ -92,6 +92,11 @@ export const envSchema = z
     LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).optional(),
     // Seconds during which reusing a just-rotated refresh token is treated as a concurrent refresh
     REFRESH_REUSE_GRACE_SECONDS: z.coerce.number().int().min(0).default(10),
+    // What the rate limiter does when the database-backed counter store is unavailable:
+    // "local" (default) keeps a temporary per-process window on the critical routes
+    // (login, register, refresh, recovery and MFA) so a store outage cannot disable them;
+    // "open" lets everything through (pure availability; the previous behaviour).
+    RATE_LIMIT_ON_DB_FAILURE: z.enum(["local", "open"]).default("local"),
   })
   .transform((cfg) => ({
     ...cfg,
