@@ -6,7 +6,22 @@ services:
     container_name: nestjs_rest_api
     restart: unless-stopped
     ports:
-      - "3011:3011"
+      # Publicado SOLO en localhost (item 12): el contenedor nunca escucha en todas las
+      # interfaces. Detrás de un proxy en el mismo host esto basta (el proxy es el único
+      # cliente). Para exponerlo a una red interna, conecta el servicio a la red del proxy
+      # en lugar de publicar el puerto — y termina TLS en el proxy, no en el contenedor.
+      - "127.0.0.1:3011:3011"
+    # Endurecimiento del contenedor (item 12): sistema de solo lectura sobre el volumen
+    # de datos, sin privilegios ni capabilities, y límites de recursos
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: "1.0"
     environment:
       - PORT=3011
       - NODE_ENV=production
@@ -37,6 +52,8 @@ services:
       - EMAIL_VERIFY_TTL_HOURS=${EMAIL_VERIFY_TTL_HOURS:-}
       - REQUIRE_EMAIL_VERIFICATION=${REQUIRE_EMAIL_VERIFICATION:-}
       - MFA_ENCRYPTION_KEY=${MFA_ENCRYPTION_KEY:-}
+      # ^ Obligatoria en producción con AUTH_MODE=full: la app no arranca sin ella
+      #   (genera una con: openssl rand -base64 48; rotación en AGENTS.md)
       - MFA_ISSUER=${MFA_ISSUER:-}
       - RECOVERY_RATE_LIMIT_MAX=${RECOVERY_RATE_LIMIT_MAX:-}
       - MFA_RATE_LIMIT_MAX=${MFA_RATE_LIMIT_MAX:-}

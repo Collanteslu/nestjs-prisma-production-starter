@@ -34,6 +34,8 @@ ENV PORT=3011
 # Default database on the persistent volume (without this the app falls back to ./dev.db,
 # outside the volume, and the data is lost on every redeploy)
 ENV DATABASE_URL=file:/app/data/prod.db
+# The runner runs read-only (docker-compose): npx must keep its cache in the tmpfs /tmp
+ENV npm_config_cache=/tmp/.npm
 
 RUN apk add --no-cache openssl
 
@@ -51,6 +53,10 @@ RUN chmod +x docker-entrypoint.sh
 USER node
 ENV HUSKY=0
 RUN npm ci --omit=dev --ignore-scripts
+# --ignore-scripts también bloqueó la descarga del schema-engine que `prisma migrate
+# deploy` necesita: se reconstruyen SOLO los paquetes de Prisma (scripts puntuales,
+# sin reactivar prepare/husky del resto de la instalación)
+RUN npm rebuild @prisma/engines prisma
 
 # Copiar el código compilado y el cliente generado de Prisma
 COPY --chown=node:node --from=builder /app/dist ./dist

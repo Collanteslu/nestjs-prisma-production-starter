@@ -38,6 +38,44 @@ export function docsEnabled(env: Env): boolean {
 }
 
 /**
+ * Scalar renders its UI from an inlined script and stylesheet, which Helmet's strict
+ * default CSP blocks. The relaxation is applied ONLY to /docs responses; every other
+ * response keeps the default Helmet CSP (item 11: keep the exception scoped to the route
+ * that needs it). `frame-ancestors 'none'` still prevents embedding the reference page.
+ */
+const DOCS_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
+/**
+ * Request/response headers that protect the browser side of the account flows:
+ * - `Referrer-Policy: no-referrer` — an emailed link carries a single-use token in its
+ *   query string; the page that consumes it must never leak that URL to third-party
+ *   resources through the `Referer` header (item 8; the consuming page should also be
+ *   third-party-free and strip the token with `history.replaceState` — AGENTS.md).
+ * - `Cache-Control: no-store` — token-bearing responses must not land in browser,
+ *   proxy or CDN caches.
+ */
+export function securityHeadersMiddleware(
+  _req: import("express").Request,
+  res: import("express").Response,
+  next: () => void,
+): void {
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Cache-Control", "no-store");
+  next();
+}
+
+/**
  * All raw-Express wiring shared by `main.ts` and the Jest e2e harness, in exact
  * execution order:
  *
@@ -61,7 +99,21 @@ export async function configureApp(
   if (env.TRUST_PROXY) express.set("trust proxy", env.TRUST_PROXY_HOPS);
 
   app.use(requestContextMiddleware);
-  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+  // Helmet with its default CSP ON (item 11): strict for every response except /docs,
+  // which relaxes it below through a scoped override. HSTS ships with Helmet's default
+  // (max-age with includeSubDomains): browsers only honour it over HTTPS, so it is a
+  // no-op on plain-HTTP responses and effective when this process terminates TLS —
+  // behind a reverse proxy the proxy should emit it instead (AGENTS.md, "Proxy").
+  app.use(helmet({ crossOriginEmbedderPolicy: false }));
+  app.use(securityHeadersMiddleware);
+  // Scoped CSP exception for the Scalar UI: registered before the /docs handler so the
+  // stricter Helmet policy above is replaced only for those responses
+  app.use((req: Request, res: Response, next: () => void) => {
+    if (req.url === "/docs" || req.url.startsWith("/docs/")) {
+      res.setHeader("Content-Security-Policy", DOCS_CSP);
+    }
+    next();
+  });
   app.enableCors({
     origin: env.CORS_ORIGINS.includes("*") ? "*" : env.CORS_ORIGINS,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
