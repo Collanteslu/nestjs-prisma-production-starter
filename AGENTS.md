@@ -56,12 +56,18 @@ npm test                    # Jest: crea y migra su propia BD SQLite temporal
 Formatting is enforced by Prettier through Husky + lint-staged on every commit.
 
 CI (`.github/workflows/ci.yml`) runs the same list plus a Docker image build, a Trivy
-scan of that image (HIGH/CRITICAL with a fix available fail the job), the Jest suite
-with coverage floors for the security-critical files, and a `contract-parity` job that
-executes the contract harness in **each** `AUTH_MODE` (fresh migrated SQLite database,
-server boot with health check, mode's groups; the runner provides the SMTP sink for
-`recovery`). Actions are pinned by commit SHA and the base image by digest; Dependabot
-(`.github/dependabot.yml`) opens weekly PRs for npm, Docker and Actions updates.
+scan of that image (HIGH/CRITICAL with a fix available fail the job), a **CycloneDX
+SBOM** published as a build artifact, the Jest suite with coverage floors for the
+security-critical files, and a `contract-parity` job that executes the contract harness
+in **each** `AUTH_MODE` (fresh migrated SQLite database, server boot with health check,
+mode's groups; the runner provides the SMTP sink for `recovery`). Actions are pinned by
+commit SHA and the base image by digest; Dependabot (`.github/dependabot.yml`) opens
+weekly PRs for npm, Docker and Actions updates. **Image signing decision:** deferred on
+purpose — CI only builds the image locally and never pushes to a registry, so there is
+nothing to attest yet; when a registry is configured (ghcr.io or similar), add
+`cosign sign --yes` with GitHub OIDC keyless identity and make deploy verify with
+`cosign verify`. Until then the integrity chain is: digest-pinned base, SHA-pinned
+actions, `npm audit`, Trivy gate and the SBOM artifact.
 Tests create and migrate their own temporary SQLite database (`test/setup-env.ts` +
 the `beforeAll` of `test/app.spec.ts`), so `dev.db` is never touched.
 `npm run test:e2e` (`test-api.sh`) is an optional curl suite against a running dev
@@ -148,6 +154,29 @@ Express can only distinguish the real client when the trust configuration matche
    process terminates TLS itself, Helmet already sends `Strict-Transport-Security` with
    its default max-age — verify which one applies in your topology and keep exactly one
    authoritative issuer.
+6. **Reference configuration** (nginx, TLS at the proxy, API bound to localhost only):
+
+   ```nginx
+   server {
+     listen 443 ssl;
+     server_name api.example.com;
+     # ssl_certificate … (emite HSTS aquí, con header Strict-Transport-Security)
+     location / {
+       proxy_pass http://127.0.0.1:3011;
+       proxy_set_header Host $host;
+       # SOBRESCRIBE la cabecera: la del cliente nunca se reenvía.
+       # ($proxy_add_x_forwarded_for también es seguro con TRUST_PROXY_HOPS=1,
+       #  porque la API confía solo en la última entrada — la que añade el proxy.)
+       proxy_set_header X-Forwarded-For $remote_addr;
+       proxy_set_header X-Forwarded-Proto $scheme;
+     }
+   }
+   ```
+
+   Traefik: `forwardedHeaders.strategy: Host` (o `insecure: false` con sus IPs de
+   confianza) reescribe las cabeceras del cliente; Caddy lo hace por defecto. Whatever
+   the proxy: the app sets `TRUST_PROXY=true` + `TRUST_PROXY_HOPS` to ITS hop count
+   only, and step 4's verification is executed against that deployment.
 
 ## Security decisions and trade-offs (audit log)
 
@@ -303,6 +332,13 @@ this repository: keep the collection in sync by hand.
 
 ## Operation and security runbooks
 
+> Every procedure below has been **rehearsed in an isolated environment** with
+> `scripts/ops-rehearsal.sh` (scratch databases in tmpdir, ports 3913/3914 — never
+> touches `dev.db` or the parity databases). A runbook is not "documented", it is
+> `scripts/ops-rehearsal.sh <mode>` exiting 0: re-run it after changing the procedure.
+> The rehearsals have caught real issues (anti-replay vs. TOTP steps; WAL not included
+> in a naive file copy) — treat those lessons as part of the procedure.
+
 - **Rotate `JWT_SECRET` / `JWT_REFRESH_SECRET`**: both are HS256 signing keys; rotating
   either invalidates the corresponding tokens immediately — access tokens die at once,
   refresh tokens at rotation, so every session re-authenticates. Procedure: generate two
@@ -310,8 +346,8 @@ this repository: keep the collection in sync by hand.
   one for both), announce the forced re-login, and verify `/api/auth/login` +
   `/api/auth/refresh` afterwards. Rate-limit/lockout pseudonyms are keyed with
   `JWT_SECRET` too, so their counters reset (harmless, short-lived).
-- **Rotate the MFA encryption key (versioned)**: `MFA_ENCRYPTION_KEY` is required in
-  production with `AUTH_MODE=full`. To rotate without locking anyone out:
+- **Rotate the MFA encryption key (versioned)** — rehearsed as
+  `scripts/ops-rehearsal.sh mfa-rotation`:
   1. Generate a new key and move the current value to `MFA_ENCRYPTION_KEY_PREVIOUS`
      (decryption-only) before setting the new one as `MFA_ENCRYPTION_KEY`.
   2. Restart every instance. Secrets keep decrypting (previous key accepted) and are
@@ -321,18 +357,35 @@ this repository: keep the collection in sync by hand.
      remove `MFA_ENCRYPTION_KEY_PREVIOUS`. NEVER rotate `JWT_SECRET` as a substitute:
      when no dedicated key is set, TOTP secrets derive from it and rotating it makes
      every authenticator undecryptable.
+  The rehearsal proves all three properties end-to-end: enroll under K1 → TOTP login
+  with K1-as-previous → TOTP login with ONLY K2 (i.e. the lazy re-encryption happened).
 - **Revoke sessions**: users do it themselves (`DELETE /api/sessions/:id`,
   `POST /api/sessions/revoke-all`); admins use `POST /api/users/:id/revoke-sessions`;
   password reset and admin MFA reset revoke the target account's sessions inside the
   same transaction. A blocked user's sessions die at block time.
-- **Backups**: SQLite — copy the `*.db` file (plus `-wal`/`-shm` after a checkpoint)
-  from the `sqlite_data` volume or the host path with the API running or stopped, and
-  encrypt the archive at rest; Turso — use its point-in-time recovery/backups and store
-  `TURSO_AUTH_TOKEN` in your secret manager. **Restores must be rehearsed**: restore
-  into a scratch location, boot the API against it with `AUTH_MODE` matching, run
-  `npx prisma migrate diff --from-migrations … --exit-code` and the contract `system`
-  group, and confirm demo/production rows are present. Schedule the rehearsal; an
-  untested backup is not a backup.
+- **Backups (encrypted) and restore** — rehearsed as
+  `scripts/ops-rehearsal.sh backup-restore`:
+  1. Snapshot the live database with **`VACUUM INTO '<file>'`** (via `@libsql/client`):
+     a consistent single file **including the WAL** — copying the `*.db` alone silently
+     loses recent commits still in `-wal` (the rehearsal proved it). Equally valid:
+     checkpoint first or copy `*.db` + `*.db-wal` + `*.db-shm` together.
+  2. Encrypt the snapshot at rest: `openssl enc -aes-256-cbc -pbkdf2 -salt -pass
+     "pass:$BACKUP_PASSWORD" -in snapshot.db -out backup.db.enc` (password from the
+     secret manager, never from the repo).
+  3. Turso: use its point-in-time recovery; store `TURSO_AUTH_TOKEN` in the secret
+     manager.
+  4. **Restore into a scratch location** and prove it: boot the API against it with the
+     matching `AUTH_MODE`, run `npx prisma migrate diff --from-migrations … --exit-code`,
+     confirm data (login of a pre-backup user) and run the contract `system` group —
+     exactly what the rehearsal script asserts. Schedule the rehearsal; an untested
+     backup is not a backup.
+- **Deployment secrets**: source of truth is the platform's secret store — host `.env`
+  (mode 0600, gitignored; `.env.example` documents keys with values blank), Docker
+  `--env-file`/secrets or an orchestrator's secret store (compose reads JWT_*/MFA_* from
+  the environment and refuses to start without them), CI values as **repository
+  secrets** (the contract's JWT values in `.github/workflows/ci.yml` are throwaway test
+  fixtures, never production secrets), cloud secret manager for Turso tokens. Secrets
+  never enter images, logs, the repo, or Bruno files (runtime variables only).
 - **Alert on the security log lines**: every hook below is a structured one-liner
   (level shown), matched with log-based alerting — no metrics endpoint is exposed on
   purpose, so the HTTP surface stays contract-identical:

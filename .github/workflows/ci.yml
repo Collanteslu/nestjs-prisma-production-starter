@@ -69,6 +69,26 @@ jobs:
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
 
+      # SBOM de la imagen (CycloneDX) como artefacto del build — decisión de endurecimiento:
+      # SBOM sí (barato y ya generado aquí); firma con cosign queda pendiente de publicar la
+      # imagen en un registro (la CI solo construye, nunca empuja — ver AGENTS.md)
+      - name: 🧾 SBOM de la imagen (CycloneDX)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          image-ref: 'nestjs-api:ci'
+          format: 'cyclonedx'
+          output: 'sbom.cdx.json'
+          exit-code: '0'
+
+      - name: 📦 Publicar el SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom-nestjs-api
+          path: sbom.cdx.json
+          retention-days: 30
+          if-no-files-found: error
+
       # Los tests crean y migran su propia base de datos SQLite temporal
       # (test/setup-env.ts + el beforeAll de test/app.spec.ts), así que dev.db no se toca.
       # Incluye los suelos de cobertura de las rutas críticas (jest.config.js).
