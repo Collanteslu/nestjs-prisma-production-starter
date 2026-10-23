@@ -47,5 +47,13 @@ export default tseslint.config(
     files: ["**/*.mjs", "**/*.js"],
     ...tseslint.configs.disableTypeChecked,
   },
+  {
+    // CLIs de soporte: node globals y la salida por consola ES el propósito
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { process: "readonly", console: "readonly", Buffer: "readonly" },
+    },
+    rules: { "no-console": "off" },
+  },
   prettier,
 );

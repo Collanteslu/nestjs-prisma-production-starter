@@ -161,7 +161,9 @@ Deliberate choices inherited from the reference and kept, with their compensatio
   (no operator action; the clock restarts on each failure), engagement is logged as a
   `WARN` line with a pseudonymous account reference for alerting, and the raw addresses
   never appear in logs. Recovery options for a locked user: wait out the window, or an
-  operator clears the `RateLimitBucket` row (the key is `lockout:<pseudonym>`).
+  operator computes the bucket key with `node --env-file=.env scripts/lockout-key.mjs
+  <email>` (the tool is pinned to `pii.ts` by test) and clears that `RateLimitBucket`
+  row.
   Progressive backoffs were evaluated and rejected for now: they would diverge from the
   reference's contract and complicate the deterministic tests for marginal gain at a
   15-minute bound.
@@ -331,9 +333,31 @@ this repository: keep the collection in sync by hand.
   `npx prisma migrate diff --from-migrations … --exit-code` and the contract `system`
   group, and confirm demo/production rows are present. Schedule the rehearsal; an
   untested backup is not a backup.
-- **Alert on the security log lines**: `Account lockout engaged…` (item 4),
-  `Rate limit store unavailable…` and `Email delivery abandoned…` (items 5 and 10) are
-  structured one-liners meant for log-based alerting.
+- **Alert on the security log lines**: every hook below is a structured one-liner
+  (level shown), matched with log-based alerting — no metrics endpoint is exposed on
+  purpose, so the HTTP surface stays contract-identical:
+
+  | Pattern | Level | Condition | Severity | Response |
+  |---|---|---|---|---|
+  | `Rate limit store unavailable` | ERROR | 1× | page | DB incident. With `RATE_LIMIT_ON_DB_FAILURE=local` the credential routes stay covered per-process and the rest fails open; check the DB, then `RateLimitGuard.metrics` (`storeFailures`, `localAllowed`, `localBlocked`, `openAllowed`) |
+  | `Account lockout engaged` | WARN | ≥5 distinct accounts / 10 min | warning | Credential stuffing or lockout abuse; correlate with per-IP 429s. Affected users self-heal within `LOGIN_LOCKOUT_MINUTES`; support locates/clears the row with `node --env-file=.env scripts/lockout-key.mjs <email>` |
+  | `Email delivery failed (attempt` | WARN | ≥3 / 10 min | warning | SMTP degrading; watch for abandonments |
+  | `Email delivery abandoned` | ERROR | 1× | page | A user will never receive the message: inspect `EmailOutbox` (`status=failed`, `lastError`), fix the transport; the user re-requests the link |
+  | `Email retired without delivery` | WARN | ≥5 / 10 min | warning | `MAIL_TRANSPORT=none` or undeliverable accounts — a misconfiguration if unintended |
+  | `Failed to persist audit log entry` | ERROR | 1× | page (compliance) | Audit gap: check DB writability; entries are lost until it recovers |
+  | `Email outbox drain failed` | ERROR | 1× | page | The delivery worker is broken — pending emails stall |
+
+  In-process counters exist for probes and tests and are deliberately not HTTP-exposed
+  (contract parity): `RateLimitGuard.metrics` and `EmailOutboxService.metrics`
+  (`enqueued`, `sent`, `retried`, `failed`).
+
+- **Routes protected locally when the store fails** (`RATE_LIMIT_ON_DB_FAILURE=local`,
+  the default): the authoritative list is `CRITICAL_RATE_LIMITS` in
+  `src/rate-limit/rate-limit.decorator.ts` — `login`, `refresh`, `register`,
+  `forgot-password`, `reset-password`, `resend-verification`, `verify-email`, `mfa`
+  (the credential-stuffing and token-guessing surface). When you add a rate-limited
+  route that must survive an outage, add its name to that set — and to the alert rules
+  above if it deserves one.
 
 ## Useful files
 
