@@ -369,12 +369,21 @@ this repository: keep the collection in sync by hand.
      a consistent single file **including the WAL** — copying the `*.db` alone silently
      loses recent commits still in `-wal` (the rehearsal proved it). Equally valid:
      checkpoint first or copy `*.db` + `*.db-wal` + `*.db-shm` together.
-  2. Encrypt the snapshot at rest: `openssl enc -aes-256-cbc -pbkdf2 -salt -pass
-     "pass:$BACKUP_PASSWORD" -in snapshot.db -out backup.db.enc` (password from the
-     secret manager, never from the repo).
-  3. Turso: use its point-in-time recovery; store `TURSO_AUTH_TOKEN` in the secret
+  2. Encrypt at rest with an **authenticated** tool — `age`
+     (`age -r "$recipient" -o backup.db.enc snapshot.db`, ChaCha20-Poly1305 AEAD).
+     Do **not** use `openssl enc`: it is CBC without authentication (it provides no
+     integrity) and it does not support authenticated modes such as GCM — so if you ever
+     fall back to OpenSSL you must add a MAC over the ciphertext (OWASP Cryptographic
+     Storage Cheat Sheet; `openssl-enc(1)`). With age, tampering fails decryption, which
+     the rehearsal asserts explicitly (a flipped byte must be rejected).
+  3. **Key handling**: `age-keygen` once per environment; the secret key lives in the
+     secret manager (or a mode-0600 file / protected descriptor on the host) and is
+     passed **by file** — `age -d -i /run/secrets/backup.key …` — never as a process
+     argument or environment variable (both are visible in `ps`/crash logs). The
+     rehearsal generates its throwaway key inside the scratch directory.
+  4. Turso: use its point-in-time recovery; store `TURSO_AUTH_TOKEN` in the secret
      manager.
-  4. **Restore into a scratch location** and prove it: boot the API against it with the
+  5. **Restore into a scratch location** and prove it: boot the API against it with the
      matching `AUTH_MODE`, run `npx prisma migrate diff --from-migrations … --exit-code`,
      confirm data (login of a pre-backup user) and run the contract `system` group —
      exactly what the rehearsal script asserts. Schedule the rehearsal; an untested
@@ -411,6 +420,45 @@ this repository: keep the collection in sync by hand.
   (the credential-stuffing and token-guessing surface). When you add a rate-limited
   route that must survive an outage, add its name to that set — and to the alert rules
   above if it deserves one.
+
+## Pre-production environment checklist (operational integration)
+
+The repository deliberately does not provision your stack's own pieces (secret store,
+proxy, SMTP provider, log pipeline) — they are environment-specific — but nothing below
+is optional before real data flows. The rehearsals prove the **procedures** in
+isolation; this checklist proves the **environment**. Record each item (date,
+environment, result) with the rollout.
+
+1. **Secrets**: provision `JWT_SECRET`, `JWT_REFRESH_SECRET`, `MFA_ENCRYPTION_KEY`,
+   SMTP credentials, `TURSO_*` and the age backup key in the real store (host `.env`
+   mode 0600, orchestrator secrets, cloud KMS). Verify: the app boots in production
+   mode, `git grep <valor>` finds nothing, and a secret scan of the delivered image
+   (`trivy image --scanners secret`) is clean.
+2. **Proxy**: deploy the reference configuration (step 6 under *Proxy deployments*)
+   with the real proxy, set `TRUST_PROXY`/`TRUST_PROXY_HOPS` to the real hop count, run
+   the forged-`X-Forwarded-For` verification **from outside** and confirm exactly one
+   HSTS issuer for the domain.
+3. **SMTP**: point `SMTP_URL` at the real provider with production settings
+   (`smtps://`, or `smtp://` + STARTTLS — TLS is forced by the app), send a real
+   `forgot-password` to a mailbox you own and consume the link end-to-end; confirm the
+   provider refuses plaintext (the fallback must fail, not downgrade). Align
+   SPF/DKIM/DMARC with `MAIL_FROM`.
+4. **Remote backups**: schedule the `VACUUM INTO` + `age` pipeline with the store's key,
+   upload off-host, and **restore from the remote copy** running the same assertions as
+   `scripts/ops-rehearsal.sh backup-restore` (`migrate diff`, login of a pre-backup
+   user, contract `system` group). For Turso, execute the point-in-time-restore drill
+   once.
+5. **Alerts on a real provider**: the table under *Operation and security runbooks* is
+   the source of truth (patterns, thresholds, severities) — provision those rules in
+   your log pipeline. Example for Grafana/Loki:
+   `sum(count_over_time({app="nestjs-api"} |= "Email delivery abandoned" [5m])) > 0` →
+   page; for Datadog, a log-monitor matching the same patterns with the same severity.
+   The in-process counters (`RateLimitGuard.metrics`, `EmailOutboxService.metrics`) are
+   available for an exporter if you need gauges — expose it on an internal port/flag so
+   the public contract surface stays untouched.
+6. **Image signing**: stays deferred while CI only builds and never pushes (decision in
+   the CI section); enable cosign keyless (GitHub OIDC) the day images land in a
+   registry and make deploys verify them.
 
 ## Useful files
 

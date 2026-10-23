@@ -145,8 +145,16 @@ backup_restore() {
   require_build
   local src="$WORK/live.db"
   local restored="$WORK/restored/live.db"
-  local password="rehearsal-backup-pass"
+  local keyfile="$WORK/backup.key"
   mkdir -p "$WORK/restored"
+
+  # Clave de backup con age. En producción se genera UNA vez y vive en el almacén de
+  # secretos (fichero 0600 o descriptor protegido): se entrega con `age -i <ruta>`,
+  # nunca como argumento de proceso ni variable de entorno (visibles en ps/logs).
+  age-keygen -o "$keyfile" >/dev/null 2>&1 || fail "age-keygen"
+  local recipient
+  recipient=$(sed -n 's/^# public key: //p' "$keyfile")
+  [ -n "$recipient" ] || fail "no se pudo leer la clave pública del backup"
 
   log "Fase A: datos vivos en una BD scratch (3914)"
   (cd "$ROOT" && DATABASE_URL="file:$src" prisma_cli migrate deploy >/dev/null)
@@ -157,7 +165,7 @@ backup_restore() {
     || fail "register (fase A)"
   stop_server
 
-  log "Fase B: snapshot consistente (VACUUM INTO) + CIFRADO AES-256-CBC/PBKDF2"
+  log "Fase B: snapshot consistente (VACUUM INTO) + CIFRADO AUTENTICADO (age, ChaCha20-Poly1305)"
   # Copiar el .db a secas perdería lo que aún vive en el -wal (¡el ensayo lo demostró!):
   # VACUUM INTO produce una instantánea consistente en un único fichero, WAL incluido.
   node -e '
@@ -165,15 +173,25 @@ backup_restore() {
     const [url, out] = process.argv.slice(1);
     createClient({ url }).execute("VACUUM INTO \x27" + out + "\x27").catch((e) => { console.error(e.message); process.exit(1); });
   ' "file:$src" "$WORK/snapshot.db" || fail "VACUUM INTO (snapshot)"
-  openssl enc -aes-256-cbc -pbkdf2 -salt -pass "pass:$password" \
-    -in "$WORK/snapshot.db" -out "$WORK/backup.db.enc" || fail "openssl al cifrar"
+  # age = AEAD (autentica integridad Y confidencialidad). openssl enc no sirve aquí:
+  # es CBC sin autenticación y sin GCM (ver openssl-enc(1) y OWASP Cryptographic Storage).
+  age -r "$recipient" -o "$WORK/backup.db.enc" "$WORK/snapshot.db" || fail "age al cifrar"
   [ -s "$WORK/backup.db.enc" ] || fail "backup vacío"
   rm -f "$src" "$WORK/snapshot.db" # solo queda el backup cifrado
-  echo "✓ backup.db.enc generado (instantánea consistente) y orígenes eliminados"
+  echo "✓ backup.db.enc generado (instantánea consistente, AEAD) y orígenes eliminados"
 
-  log "Fase C: restauración en otra ruta (entorno aislado)"
-  openssl enc -d -aes-256-cbc -pbkdf2 -pass "pass:$password" \
-    -in "$WORK/backup.db.enc" -out "$restored" || fail "openssl al descifrar"
+  log "Fase B2: autenticación de integridad — un byte alterado debe rechazarse"
+  cp "$WORK/backup.db.enc" "$WORK/tampered.enc"
+  printf '\x00' | dd of="$WORK/tampered.enc" bs=1 seek=64 conv=notrunc status=none 2>/dev/null \
+    || fail "dd al alterar el ciphertext"
+  if age -d -i "$keyfile" -o /dev/null "$WORK/tampered.enc" 2>/dev/null; then
+    fail "age aceptó un backup alterado (¡el cifrado no autentica!)"
+  fi
+  rm -f "$WORK/tampered.enc"
+  echo "✓ el ciphertext alterado se rechaza en el descifrado (integridad AEAD)"
+
+  log "Fase C: restauración en otra ruta (entorno aislado, clave por fichero)"
+  age -d -i "$keyfile" -o "$restored" "$WORK/backup.db.enc" || fail "age al descifrar"
   (cd "$ROOT" && DATABASE_URL="file:$restored" prisma_cli migrate diff \
     --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code) \
     || fail "migrate diff tras restaurar"
