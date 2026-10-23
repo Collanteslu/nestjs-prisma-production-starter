@@ -21,11 +21,11 @@ jobs:
       # Actions pinned by commit SHA (supply chain, item 13); Dependabot keeps them
       # up to date — see .github/dependabot.yml
       - name: 📥 Clonar repositorio
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # engines.node >=24.9 (ver package.json)
       - name: ⚙️ Configurar Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: 'npm'
@@ -58,8 +58,11 @@ jobs:
 
       # Scan the image built above for HIGH/CRITICAL vulnerabilities with a fix available
       - name: 🔍 Escaneo de la imagen (Trivy)
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          # Fijado explícito: la versión por defecto de la acción 0.33.1 (v0.65.0) es una
+          # tag sin release ni assets y su instalación falla siempre; v0.76.1 verificado
+          version: v0.76.1
           image-ref: 'nestjs-api:ci'
           format: 'table'
           exit-code: '1'
@@ -85,10 +88,10 @@ jobs:
 
     steps:
       - name: 📥 Clonar repositorio
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: ⚙️ Configurar Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: 'npm'
