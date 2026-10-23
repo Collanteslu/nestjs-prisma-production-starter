@@ -1,0 +1,20 @@
+# Keeps the supply chain current (item 13): dependency updates, base image bumps and
+# pinned-Action refreshes arrive as PRs to review, never silently.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Renews the SHA pins in .github/workflows/ci.yml (with the tag as a comment)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

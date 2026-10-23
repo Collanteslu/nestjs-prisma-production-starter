@@ -122,15 +122,17 @@ export class EmailOutboxService {
   }
 
   private async deliver(row: OutboxRow): Promise<void> {
-    // A transport that never delivers: retrying would only add noise — retire the row now
+    // A transport that never delivers: retrying cannot change the outcome inside this
+    // process — retire the row now (rows survive a restart with a fixed transport only
+    // when they stay pending, which is why the user can always re-request the link)
     if (this.env.MAIL_TRANSPORT === "none") {
-      await this.finish(row, "MAIL_TRANSPORT=none: nothing is configured to deliver");
+      await this.failTerminal(row, "MAIL_TRANSPORT=none: nothing is configured to deliver");
       return;
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: row.userId } });
     if (!user || user.deletedAt || user.isBlocked) {
-      await this.finish(row, "account no longer deliverable");
+      await this.failTerminal(row, "account no longer deliverable");
       return;
     }
 
@@ -152,6 +154,25 @@ export class EmailOutboxService {
     } catch (error) {
       await this.finish(row, String(error));
     }
+  }
+
+  /**
+   * Terminal failure without a delivery attempt: the outcome cannot change by retrying
+   * (no transport configured, or no deliverable account), so the row is retired at once
+   * and the condition is surfaced through `metrics.failed` and a warning.
+   */
+  private async failTerminal(row: OutboxRow, reason: string): Promise<void> {
+    await this.prisma.emailOutbox.update({
+      where: { id: row.id },
+      data: {
+        status: "failed",
+        attempts: row.attempts + 1,
+        lastError: reason.slice(0, 500),
+        claimedAt: null,
+      },
+    });
+    this.metrics.failed += 1;
+    this.logger.warn(`Email retired without delivery (type=${row.type}): ${reason}`);
   }
 
   /** Records a failed attempt: schedules the next retry, or gives up at MAX_ATTEMPTS */

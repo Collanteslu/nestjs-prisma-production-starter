@@ -18,12 +18,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Actions pinned by commit SHA (supply chain, item 13); Dependabot keeps them
+      # up to date — see .github/dependabot.yml
       - name: 📥 Clonar repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       # engines.node >=24.9 (ver package.json)
       - name: ⚙️ Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: 'npm'
@@ -34,8 +36,10 @@ jobs:
       - name: 🛠️ Generar Prisma Client
         run: npx prisma generate
 
-      - name: 🛡️ Auditoría de dependencias de producción
-        run: npm audit --omit=dev --audit-level=high
+      # ALL dependencies (dev included), not only the production subset: dev tooling
+      # runs in CI and on developer machines too (item 13)
+      - name: 🛡️ Auditoría de dependencias (todas, severidad high+)
+        run: npm audit --audit-level=high
 
       - name: 🗄️ Verificar que las migraciones coinciden con el schema
         run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
@@ -52,7 +56,79 @@ jobs:
       - name: 🐳 Construir la imagen Docker
         run: docker build -t nestjs-api:ci .
 
+      # Scan the image built above for HIGH/CRITICAL vulnerabilities with a fix available
+      - name: 🔍 Escaneo de la imagen (Trivy)
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        with:
+          image-ref: 'nestjs-api:ci'
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+
       # Los tests crean y migran su propia base de datos SQLite temporal
-      # (test/setup-env.ts + el beforeAll de test/app.spec.ts), así que dev.db no se toca
+      # (test/setup-env.ts + el beforeAll de test/app.spec.ts), así que dev.db no se toca.
+      # Incluye los suelos de cobertura de las rutas críticas (jest.config.js).
       - name: 🧪 Ejecutar Tests Automatizados con cobertura (Jest)
         run: npm run test:cov
+
+  # Executable contract vs the reference behaviour, in every AUTH_MODE (item 14).
+  # Each matrix leg boots a fresh, migrated SQLite database, starts the server and runs
+  # the groups applicable to its mode; `recovery` gets its SMTP sink from the runner.
+  contract-parity:
+    name: Contrato (AUTH_MODE=${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [none, basic, full]
+
+    steps:
+      - name: 📥 Clonar repositorio
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: ⚙️ Configurar Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: 📦 Instalar dependencias
+        run: npm ci
+
+      - name: 🛠️ Generar Prisma Client
+        run: npx prisma generate
+
+      - name: 🏗️ Compilación (Build)
+        run: npm run build
+
+      - name: 🗄️ Migrar la base de datos temporal del contrato
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: file:./contract-ci.db
+
+      - name: 🚀 Arrancar el servidor (AUTH_MODE=${{ matrix.mode }})
+        run: |
+          nohup env PORT=3011 \
+            AUTH_MODE=${{ matrix.mode }} \
+            DATABASE_URL=file:./contract-ci.db \
+            JWT_SECRET=contract-ci-secret-0123456789abcdef0123456789 \
+            JWT_REFRESH_SECRET=contract-ci-refresh-abcdef0123456789abcdef01 \
+            MAIL_TRANSPORT=smtp SMTP_URL=smtp://127.0.0.1:2525 \
+            MAIL_FROM="Contract <no-reply@localhost>" \
+            APP_URL=http://127.0.0.1:3011 \
+            node dist/main.js > server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:3011/healthz > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "El servidor no arrancó:"
+          tail -50 server.log
+          exit 1
+
+      - name: 🧪 Ejecutar el contrato de paridad
+        run: node contract/run.mjs --base http://127.0.0.1:3011 --mode ${{ matrix.mode }} --db "$PWD/contract-ci.db"
+
+      - name: 📋 Log del servidor
+        if: failure()
+        run: tail -80 server.log || true

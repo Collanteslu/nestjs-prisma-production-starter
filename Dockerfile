@@ -1,7 +1,9 @@
 # ==========================================
 # Etapa 1: Dependencias y Compilación
 # ==========================================
-FROM node:24-alpine AS builder
+# Base fijada por digest (builds reproducibles, item 13): actualízala junto con un
+# smoke test de `docker run` (Dependabot propone el bump semanalmente)
+FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS builder
 
 WORKDIR /app
 
@@ -25,7 +27,7 @@ RUN npm run build
 # ==========================================
 # Etapa 2: Imagen Final Ligera para Producción
 # ==========================================
-FROM node:24-alpine AS runner
+FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS runner
 
 WORKDIR /app
 
