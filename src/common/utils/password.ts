@@ -1,31 +1,45 @@
 import { randomUUID } from "node:crypto";
+import { hash, verify } from "@node-rs/argon2";
 import bcrypt from "bcryptjs";
 
-/** Number of salt rounds for key derivation */
-const SALT_ROUNDS = 12;
+/**
+ * OWASP Password Storage: Argon2id is the recommended algorithm. The parameters follow
+ * the OWASP baseline (m = 19 MiB, t = 2, p = 1). `bcryptjs` remains only to verify
+ * hashes from pre-Argon2id installs: they keep working and are upgraded IN PLACE after
+ * the next successful login (progressive rehash — never a mass rewrite of stored hashes).
+ *
+ * Passwords are additionally capped at 72 bytes UTF-8 by the request schemas, which
+ * keeps the legacy bcrypt path free of silent truncation as well.
+ */
+const ARGON2_OPTIONS = { memoryCost: 19_456, timeCost: 2, parallelism: 1 } as const;
 
 let dummyHash: Promise<string> | undefined;
 
 /**
- * Returns a real bcrypt hash (same cost factor as stored passwords) of a random secret.
- * Compared against when a login email does not exist, so both paths take the same time.
+ * Returns a real argon2id hash of a random secret. Compared against when a login email
+ * does not exist, so both paths take the same time (and the format is the real one).
  */
 export function getDummyHash(): Promise<string> {
   dummyHash ??= hashPassword(randomUUID());
   return dummyHash;
 }
 
-/**
- * Hashes a plaintext password using bcrypt with an automatically generated salt.
- */
+/** Hashes a plaintext password with Argon2id and a random salt */
 export async function hashPassword(plainPassword: string): Promise<string> {
-  return bcrypt.hash(plainPassword, SALT_ROUNDS);
+  return hash(plainPassword, ARGON2_OPTIONS);
 }
 
 /**
- * Compares a plaintext password against a stored bcrypt hash in constant time
- * to prevent timing-attack vulnerabilities.
+ * Compares a plaintext password against the stored hash in constant time. Dispatches on
+ * the stored format; an unknown format fails closed (it must never authenticate).
  */
-export async function comparePassword(plainPassword: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(plainPassword, hash);
+export async function comparePassword(plainPassword: string, stored: string): Promise<boolean> {
+  if (stored.startsWith("$argon2")) return verify(stored, plainPassword);
+  if (stored.startsWith("$2")) return bcrypt.compare(plainPassword, stored); // legacy
+  return false;
+}
+
+/** True while the stored hash should be upgraded (legacy bcrypt or unknown format) */
+export function needsRehash(stored: string): boolean {
+  return !stored.startsWith("$argon2");
 }

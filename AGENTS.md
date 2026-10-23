@@ -7,9 +7,21 @@ security model lives in the generated documentation at `/docs` once the server r
 
 **Stack:** NestJS 12 · Prisma 7 with the libSQL driver adapter (SQLite file locally,
 optionally Turso) · Zod 4 + `nestjs-zod` · Jest + supertest · ESLint + Prettier ·
-Node.js 24 (`engines.node >=24.9`; the Docker base image is `node:24-alpine`).
-`.npmrc` sets `legacy-peer-deps=true` — a documented exception required by the current
-peer-dependency graph; do not remove it without resolving the conflicts properly.
+Node.js 24 (`engines.node >=24.9`; the Docker base image is `node:24-alpine`, pinned
+by digest).
+
+`.npmrc` sets `legacy-peer-deps=true` for ONE documented reason: `nestjs-zod@5.5.0`
+(the latest release) declares peers `@nestjs/common ^10 || ^11` and `@nestjs/swagger
+^7 || ^8 || ^11`, while this template runs Nest and Swagger **12** — npm would refuse
+the install otherwise. The incompatibility is contained by a multi-layer safety net
+that runs on every change: `npm run typecheck` and `npm run build` against the real
+types, the Jest suite (which validates the generated document with
+`@apidevtools/swagger-parser`), and the contract harness (which pins the document's
+paths, schemes and responses per mode) — all in CI. **Exit criteria:** when Dependabot
+proposes a `nestjs-zod` release whose peers include Nest/Swagger 12, upgrade it and
+delete `legacy-peer-deps` from `.npmrc`; until then do not remove the flag (the install
+would break) and do not upgrade `@nestjs/swagger` past the peer range without running
+the full suite.
 
 ## Install and run
 
@@ -42,11 +54,17 @@ npm test                    # Jest: crea y migra su propia BD SQLite temporal
 
 Formatting is enforced by Prettier through Husky + lint-staged on every commit.
 
-CI (`.github/workflows/ci.yml`) runs the same list plus a Docker image build and the Jest
-suite with coverage (`npm run test:cov`). Tests create and migrate their own temporary
-SQLite database (`test/setup-env.ts` + the `beforeAll` of `test/app.spec.ts`), so `dev.db`
-is never touched. `npm run test:e2e` (`test-api.sh`) is an optional curl suite against a
-running dev server: it needs the demo accounts and `AUTH_MODE=full`.
+CI (`.github/workflows/ci.yml`) runs the same list plus a Docker image build, a Trivy
+scan of that image (HIGH/CRITICAL with a fix available fail the job), the Jest suite
+with coverage floors for the security-critical files, and a `contract-parity` job that
+executes the contract harness in **each** `AUTH_MODE` (fresh migrated SQLite database,
+server boot with health check, mode's groups; the runner provides the SMTP sink for
+`recovery`). Actions are pinned by commit SHA and the base image by digest; Dependabot
+(`.github/dependabot.yml`) opens weekly PRs for npm, Docker and Actions updates.
+Tests create and migrate their own temporary SQLite database (`test/setup-env.ts` +
+the `beforeAll` of `test/app.spec.ts`), so `dev.db` is never touched.
+`npm run test:e2e` (`test-api.sh`) is an optional curl suite against a running dev
+server: it needs the demo accounts and `AUTH_MODE=full`.
 
 ## Contract parity
 
@@ -100,6 +118,108 @@ How it is wired, so new code follows the same pattern:
   `AppModule.forRoot(env)` — never `process.env` at import time). Tests for another mode
   run the contract harness against a server started with that mode.
 
+## Proxy deployments (`TRUST_PROXY`)
+
+The client IP feeds the per-IP rate limits, the login lockout and the audit trail, and
+Express can only distinguish the real client when the trust configuration matches the
+**exact** deployment topology:
+
+1. **Network**: in production the API must be reachable ONLY through the proxy — if a
+   client can hit it directly, it can send its own `X-Forwarded-For` and pick the
+   address the limits key on. Close port 3011 at the firewall/security-group level
+   (docker-compose already binds `127.0.0.1` only).
+2. **Header ownership**: the proxy must OVERWRITE (or append to) `X-Forwarded-For` —
+   never pass a client-supplied header through untouched. The app reads only
+   `X-Forwarded-For`, from the right, and ignores `CF-Connecting-IP`/`X-Real-IP`.
+3. **Exact hops**: set `TRUST_PROXY=true` and `TRUST_PROXY_HOPS` to the number of
+   trusted proxies in front of the API (1 = Traefik/Nginx; 2 = Cloudflare + Traefik).
+   Too many hops trusts attacker-controlled entries; too few makes everyone share one
+   bucket (self-DoS). Express gets the numeric value, never `true`.
+4. **Verify per deployment** (document the result with the rollout):
+   - `curl -H "X-Forwarded-For: 1.2.3.4" https://your-api/api/auth/login` (bad password)
+     from OUTSIDE the proxy → the audit entry's `ipAddress` must be the caller's real
+     address, never `1.2.3.4`; from a direct connection, the port must be unreachable.
+   - Automated both-posture coverage: `test/trust-proxy.spec.ts` pins that
+     `X-Forwarded-For` is ignored by default and honoured for exactly the configured
+     hop count when enabled.
+5. **TLS termination**: when TLS terminates at the proxy, emit **HSTS** there (the API
+   serves plain HTTP; Helmet's HSTS header is ignored by browsers over HTTP). When this
+   process terminates TLS itself, Helmet already sends `Strict-Transport-Security` with
+   its default max-age — verify which one applies in your topology and keep exactly one
+   authoritative issuer.
+
+## Security decisions and trade-offs (audit log)
+
+Deliberate choices inherited from the reference and kept, with their compensations:
+
+- **Account-based lockout (item 4).** `LOGIN_LOCKOUT_*` counts failures per ACCOUNT, so
+  anyone who knows an email can keep it locked for up to `LOGIN_LOCKOUT_MINUTES` — a
+  bounded denial of service against that one account, accepted as the price of stopping
+  credential stuffing that rotates IPs (distributed attacks also burn the per-IP
+  `LOGIN_RATE_LIMIT_MAX`). Compensations: the lockout is time-boxed and self-healing
+  (no operator action; the clock restarts on each failure), engagement is logged as a
+  `WARN` line with a pseudonymous account reference for alerting, and the raw addresses
+  never appear in logs. Recovery options for a locked user: wait out the window, or an
+  operator clears the `RateLimitBucket` row (the key is `lockout:<pseudonym>`).
+  Progressive backoffs were evaluated and rejected for now: they would diverge from the
+  reference's contract and complicate the deterministic tests for marginal gain at a
+  15-minute bound.
+- **Rate limiter under store failure (item 5).** With `RATE_LIMIT_ON_DB_FAILURE=local`
+  (default) a database outage does NOT disable protection on the credential surface:
+  login, register, refresh, recovery and MFA keep a per-process fixed window
+  (correct for a single instance; degrades to per-instance limits across replicas),
+  while every failure is logged (`Rate limit store unavailable…`) and counted in
+  `RateLimitGuard.metrics` (`storeFailures`, `localAllowed`, `localBlocked`,
+  `openAllowed`) — hook log-based alerting on those lines. `RATE_LIMIT_ON_DB_FAILURE=open`
+  restores fail-open everywhere for availability-first deployments.
+- **Wildcard CORS in production (item 15).** `CORS_ORIGINS=*` is rejected at startup
+  unless `CORS_ALLOW_WILDCARD=true` makes the choice explicit and reviewable.
+- **Registration reveals duplicates (enumeration).** `POST /api/auth/register` answers
+  409 with the taken address, while every recovery flow answers identically whether or
+  not the account exists. Kept on purpose for a starter template's signup UX and pinned
+  by the contract; a deployment with strict enumeration resistance should switch the
+  register flow to a generic "check your inbox" response (product decision, contract
+  change required).
+- **OpenAPI exposure.** `/docs` and `/openapi.json` default to enabled outside
+  production (`ENABLE_DOCS`); in production they are OFF and publishing them must be an
+  explicit `ENABLE_DOCS=true`. The document itself carries no server-side secrets.
+
+## Account emails: durable outbox and links
+
+- **Delivery (item 10).** The request only persists an `EmailOutbox` intent in the same
+  transaction as its audit entry; a worker (kicked immediately, polled every 30 s)
+  delivers with exponential backoff (5 attempts ≈ 15 min) and then parks the row as
+  `failed` with a `WARN`/`ERROR` log — the hooks for delivery alerting. Pending rows
+  survive restarts; tokens are minted AT DELIVERY time, so raw tokens never sit in the
+  database. `MAIL_TRANSPORT=none` and undeliverable accounts retire rows immediately.
+- **Safe re-request (item 10).** `POST /api/auth/forgot-password` and
+  `/resend-verification` are the supported way to get a fresh link: they are rate
+  limited per IP and per address (max 3/hour), answer 202 regardless of existence, and
+  issuing a new token invalidates the previous pending one.
+- **Token in the link (item 8).** Emailed links carry `?token=…` on the FRONTEND's
+  page. The API already answers `Referrer-Policy: no-referrer` and
+  `Cache-Control: no-store` on every response, but the consuming page must also:
+  load no third-party resources or analytics, remove the token from the address bar
+  with `history.replaceState` as soon as it is read, and exchange it through the
+  existing **POST** `/api/auth/reset-password` / `verify-email` endpoints (never a GET
+  with the token in the query). Prefer a page served from your own origin.
+- **Logging (item 1).** `MAIL_TRANSPORT=log` is development-only and rejected in
+  production; no logger records message bodies or tokens — only subject and errors.
+
+## Personal data in logs and keys (item 9)
+
+- Rate-limit and lockout buckets never store raw addresses: keys carry
+  `pseudonym(JWT_SECRET, value)` — an HMAC-SHA256 with HKDF-derived material, normalized
+  (trimmed/lowercased), so instances sharing the signing secret share the buckets and
+  correlation works. Rotating `JWT_SECRET` rotates the pseudonyms (counters reset — fine
+  for their short windows).
+- Audit `details` store `account=<pseudonym>` instead of emails for LOGIN_FAILED,
+  CREATE and DELETE_PERMANENT; the users list remains the place where authorized admins
+  see real addresses. Access: `GET /api/audit-logs` is admin-only. Retention:
+  `AUDIT_RETENTION_DAYS` (default 90, 0 = forever), purged by the cleanup job;
+  outbox rows keep 30 days. Export: there is no bulk export endpoint by design —
+  any future exporter must carry the same admin gate and retention review.
+
 ## Code conventions
 
 1. **Controllers stay thin.** Routes are declared with decorators plus Swagger metadata
@@ -127,7 +247,10 @@ How it is wired, so new code follows the same pattern:
    (honours `TRUST_PROXY`); multi-step writes (block/delete + session revocation, token
    rotation, password/email change + token invalidation) inside `prisma.$transaction`.
    Per-IP limits use `@RateLimit("…")` with the registry in
-   `src/rate-limit/rate-limit.decorator.ts`.
+   `src/rate-limit/rate-limit.decorator.ts`. Passwords are hashed with **Argon2id**
+   (OWASP baseline m=19 MiB, t=2, p=1; 72-byte schema cap keeps the legacy bcrypt path
+   truncation-free); legacy bcrypt hashes keep verifying and are upgraded in place after
+   the next successful login — never rewrite stored hashes in bulk.
 7. **Audit:** mutating and security-relevant actions call
    `audit.record(req, { userId, action, entity, entityId, details })`.
 8. **API messages** (errors and validation) are in English.
@@ -168,6 +291,42 @@ this repository: keep the collection in sync by hand.
   push to `main` directly and never merge your own PR. Describe data-changing migrations
   and behaviour changes in the PR.
 
+## Operation and security runbooks
+
+- **Rotate `JWT_SECRET` / `JWT_REFRESH_SECRET`**: both are HS256 signing keys; rotating
+  either invalidates the corresponding tokens immediately — access tokens die at once,
+  refresh tokens at rotation, so every session re-authenticates. Procedure: generate two
+  new distinct secrets (`openssl rand -base64 48`), deploy them together (never reuse
+  one for both), announce the forced re-login, and verify `/api/auth/login` +
+  `/api/auth/refresh` afterwards. Rate-limit/lockout pseudonyms are keyed with
+  `JWT_SECRET` too, so their counters reset (harmless, short-lived).
+- **Rotate the MFA encryption key (versioned)**: `MFA_ENCRYPTION_KEY` is required in
+  production with `AUTH_MODE=full`. To rotate without locking anyone out:
+  1. Generate a new key and move the current value to `MFA_ENCRYPTION_KEY_PREVIOUS`
+     (decryption-only) before setting the new one as `MFA_ENCRYPTION_KEY`.
+  2. Restart every instance. Secrets keep decrypting (previous key accepted) and are
+     re-encrypted with the new key lazily, on each user's next successful TOTP
+     verification — no maintenance window.
+  3. After every enrolled user has logged in once with 2FA (or a generous deadline),
+     remove `MFA_ENCRYPTION_KEY_PREVIOUS`. NEVER rotate `JWT_SECRET` as a substitute:
+     when no dedicated key is set, TOTP secrets derive from it and rotating it makes
+     every authenticator undecryptable.
+- **Revoke sessions**: users do it themselves (`DELETE /api/sessions/:id`,
+  `POST /api/sessions/revoke-all`); admins use `POST /api/users/:id/revoke-sessions`;
+  password reset and admin MFA reset revoke the target account's sessions inside the
+  same transaction. A blocked user's sessions die at block time.
+- **Backups**: SQLite — copy the `*.db` file (plus `-wal`/`-shm` after a checkpoint)
+  from the `sqlite_data` volume or the host path with the API running or stopped, and
+  encrypt the archive at rest; Turso — use its point-in-time recovery/backups and store
+  `TURSO_AUTH_TOKEN` in your secret manager. **Restores must be rehearsed**: restore
+  into a scratch location, boot the API against it with `AUTH_MODE` matching, run
+  `npx prisma migrate diff --from-migrations … --exit-code` and the contract `system`
+  group, and confirm demo/production rows are present. Schedule the rehearsal; an
+  untested backup is not a backup.
+- **Alert on the security log lines**: `Account lockout engaged…` (item 4),
+  `Rate limit store unavailable…` and `Email delivery abandoned…` (items 5 and 10) are
+  structured one-liners meant for log-based alerting.
+
 ## Useful files
 
 | Path | What |
@@ -178,6 +337,9 @@ this repository: keep the collection in sync by hand.
 | `src/app.module.ts` | Conditional module mounting by features; global guards, pipes, interceptors |
 | `src/configure-app.ts` | Helmet, CORS, body parsers, middleware, Swagger + Scalar |
 | `src/common/` | Decorators (`@Public`, `@RateLimit`, `@TopLevelEnvelope`), pipes, interceptors, filters, middleware |
+| `src/common/utils/password.ts` | Argon2id hashing + legacy bcrypt verify and progressive rehash |
+| `src/common/utils/pii.ts` | `pseudonym()` — HMAC pseudonyms for keys and security logs |
+| `src/mail/email-outbox.service.ts` | Durable delivery worker (backoff, retries, metrics) |
 | `src/<recurso>/` | One module per resource (controller + service + `dto/`) |
 | `src/jobs/cleanup.service.ts` | Periodic purge of expired sessions, tokens, buckets and old audit rows |
 | `test/app.spec.ts` | Jest integration suite: HTTP infrastructure over the real surface |

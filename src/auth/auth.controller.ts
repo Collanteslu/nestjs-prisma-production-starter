@@ -27,7 +27,7 @@ import { TopLevelEnvelope } from "../common/decorators/envelope.decorator";
 import { Public } from "../common/decorators/public.decorator";
 import { RetryAfterException } from "../common/exceptions/retry-after.exception";
 import { inBackground } from "../common/utils/background";
-import { comparePassword, getDummyHash, hashPassword } from "../common/utils/password";
+import { comparePassword, getDummyHash, hashPassword, needsRehash } from "../common/utils/password";
 import { pseudonym } from "../common/utils/pii";
 import { hashToken } from "../common/utils/hash-token";
 import type { Env, Features } from "../config/env";
@@ -208,6 +208,16 @@ export class AuthController {
           401,
         );
       }
+    }
+
+    // Progressive migration to Argon2id (OWASP Password Storage): a legacy bcrypt hash is
+    // re-hashed in place once, only after a fully successful login — never by rewriting
+    // stored hashes en masse. Best effort: a write race must not break the login itself.
+    if (needsRehash(user.password)) {
+      const upgraded = await hashPassword(password);
+      await this.prisma.user
+        .update({ where: { id: user.id }, data: { password: upgraded } })
+        .catch(() => undefined);
     }
 
     await this.lockout.reset(email);
