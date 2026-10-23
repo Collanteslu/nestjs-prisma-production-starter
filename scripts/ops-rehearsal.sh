@@ -11,6 +11,7 @@ set -euo pipefail
 # Sale con código != 0 y el log del servidor en $WORK si algo falla (el trap lo limpia).
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/ops-rehearsal.XXXXXX")"
 MODE="${1:-}"
 
@@ -28,6 +29,17 @@ cleanup() {
 trap cleanup EXIT
 
 prisma_cli() { node "$ROOT/node_modules/prisma/build/index.js" "$@"; }
+
+# Consulta directa a una BD SQLite (requiere @libsql/client, dependencia de producción)
+db_query() { # $1=ruta del fichero  $2=SQL  -> filas como JSON
+  node -e '
+    const { createClient } = require("@libsql/client");
+    createClient({ url: "file:" + process.argv[1] })
+      .execute(process.argv[2])
+      .then((r) => { process.stdout.write(JSON.stringify(r.rows)); })
+      .catch((e) => { console.error(e.message); process.exit(1); });
+  ' "$1" "$2"
+}
 
 start_server() { # $1=puerto $2=db $3..=env extra
   local port="$1" db="$2"; shift 2
@@ -210,11 +222,73 @@ backup_restore() {
   stop_server
 }
 
+# ------------------------------------------------------------------ outbox-restart
+# Durabilidad del correo: con SMTP caído la solicitud se encola y el intento falla;
+# las filas pendientes SOBREVIVEN al reinicio y se entregan cuando el proveedor vuelve.
+outbox_restart() {
+  require_build
+  local db="$WORK/outbox.db"
+  local port=3915
+  local base="http://127.0.0.1:$port"
+  local email="outbox-$(date +%s)@example.com"
+  local key="rehearsal-key-0123456789abcdef0123456789ab"
+
+  log "Fase A: SMTP caído (nadie en :2525) — registro + forgot-password se encolan"
+  (cd "$ROOT" && DATABASE_URL="file:$db" prisma_cli migrate deploy >/dev/null)
+  start_server "$port" "$db" MFA_ENCRYPTION_KEY="$key" \
+    MAIL_TRANSPORT=smtp SMTP_URL="smtp://127.0.0.1:2525"
+  curl -sf -X POST "$base/api/auth/register" -H 'content-type: application/json' \
+    -d "{\"name\":\"Outbox\",\"email\":\"$email\",\"password\":\"Password123!\"}" >/dev/null \
+    || fail "register (fase A)"
+  curl -sf -X POST "$base/api/auth/forgot-password" -H 'content-type: application/json' \
+    -d "{\"email\":\"$email\"}" >/dev/null || fail "forgot-password (fase A)"
+  sleep 4 # primer intento de entrega (falla) + kicker
+  local rows
+  rows=$(db_query "$db" "SELECT type, status, attempts FROM EmailOutbox ORDER BY createdAt")
+  echo "outbox tras el intento fallido: $rows"
+  echo "$rows" | grep -q '"password_reset"' || fail "no hay fila password_reset encolada"
+  echo "$rows" | grep -q 'pending' || fail "la fila no quedó pending tras el fallo SMTP"
+  echo "✓ la solicitud quedó durable en la outbox con el primer intento fallido"
+  stop_server
+
+  log "Fase B: vuelve el SMTP + reinicio — las filas pendientes se entregan"
+  cat >"$WORK/sink.mjs" <<SINKEOF
+import { writeFileSync } from "node:fs";
+import { startSmtpSink } from "file://$ROOT/contract/net.mjs";
+startSmtpSink(2525);
+writeFileSync(process.argv[2], "ready");
+process.on("SIGTERM", () => process.exit(0));
+setInterval(() => {}, 1 << 30);
+SINKEOF
+  node "$WORK/sink.mjs" "$WORK/sink.ready" >/dev/null 2>&1 &
+  local sink_pid=$!
+  for _ in $(seq 1 20); do [ -f "$WORK/sink.ready" ] && break; sleep 0.5; done
+  [ -f "$WORK/sink.ready" ] || fail "el sink SMTP no arrancó"
+  start_server "$port" "$db" MFA_ENCRYPTION_KEY="$key" \
+    MAIL_TRANSPORT=smtp SMTP_URL="smtp://127.0.0.1:2525"
+
+  local i status=""
+  for i in $(seq 1 40); do # el worker reintenta con backoff (30s) — hasta ~75s
+    status=$(db_query "$db" "SELECT status FROM EmailOutbox WHERE type='password_reset' ORDER BY createdAt DESC LIMIT 1" 2>/dev/null || echo "[]")
+    echo "$status" | grep -q sent && break
+    sleep 2
+  done
+  echo "outbox final: $(db_query "$db" "SELECT type, status, attempts FROM EmailOutbox ORDER BY createdAt")"
+  echo "$status" | grep -q sent || fail "la fila no llegó a sent con el SMTP restaurado"
+  local verify
+  verify=$(db_query "$db" "SELECT status FROM EmailOutbox WHERE type='email_verify' ORDER BY createdAt DESC LIMIT 1")
+  echo "$verify" | grep -q sent || fail "la fila email_verify no se entregó"
+  echo "✓ filas pendientes entregadas tras el reinicio (password_reset y email_verify en sent)"
+  stop_server
+  kill "$sink_pid" 2>/dev/null || true
+}
+
 case "$MODE" in
   mfa-rotation) mfa_rotation ;;
   backup-restore) backup_restore ;;
+  outbox-restart) outbox_restart ;;
   *)
-    echo "Uso: scripts/ops-rehearsal.sh mfa-rotation|backup-restore" >&2
+    echo "Uso: scripts/ops-rehearsal.sh mfa-rotation|backup-restore|outbox-restart" >&2
     exit 2
     ;;
 esac

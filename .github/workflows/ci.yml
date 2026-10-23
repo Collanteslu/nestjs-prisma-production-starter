@@ -152,6 +152,12 @@ jobs:
       - name: 🧪 Ejecutar el contrato de paridad
         run: node contract/run.mjs --base http://127.0.0.1:3011 --mode ${{ matrix.mode }} --db "$PWD/contract-ci.db"
 
+      # La colección Bruno, viva contra el mismo servidor (solo full: necesita los
+      # usuarios demo que siembra el modo completo; valida URL/cuerpos contra la API real)
+      - name: 📭 Batería Bruno (colección viva)
+        if: matrix.mode == 'full'
+        run: ./scripts/bruno-smoke.sh http://127.0.0.1:3011
+
       - name: 📋 Log del servidor
         if: failure()
         run: tail -80 server.log || true
