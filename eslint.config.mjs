@@ -5,7 +5,15 @@ import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "node_modules/**", "coverage/**", "contract/**", "prisma/migrations/**"],
+    ignores: [
+      "dist/**",
+      "node_modules/**",
+      "coverage/**",
+      "contract/**",
+      "prisma/migrations/**",
+      // Tercero vendorizado (nestjs-zod): código compilado upstream, no nuestro estilo
+      "vendor/**",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
