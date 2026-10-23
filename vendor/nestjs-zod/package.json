@@ -1,0 +1,53 @@
+{
+  "name": "nestjs-zod",
+  "description": "All NestJS + Zod utilities you need (vendored copy: peerDependencies removed, see vendor/nestjs-zod/LICENSE)",
+  "version": "5.5.0",
+  "main": "./dist/index.cjs",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./dto": {
+      "import": {
+        "types": "./dist/dto.d.mts",
+        "default": "./dist/dto.mjs"
+      },
+      "require": {
+        "types": "./dist/dto.d.cts",
+        "default": "./dist/dto.cjs"
+      }
+    }
+  },
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "files": [
+    "dist",
+    "logo.svg",
+    "img"
+  ],
+  "sideEffects": false,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:BenLorantfy/nestjs-zod.git",
+    "directory": "packages/nestjs-zod"
+  },
+  "author": "Ben Lorantfy <ben@lorantfy.com>",
+  "contributors": [
+    "Ben Lorantfy <ben@lorantfy.com>",
+    "Evgeny Zakharov <to@risen.dev>"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "deepmerge": "^4.3.1"
+  }
+}

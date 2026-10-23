@@ -10,8 +10,10 @@ WORKDIR /app
 # Instalar dependencias del sistema requeridas por Prisma / SQLite
 RUN apk add --no-cache openssl
 
-# .npmrc lleva legacy-peer-deps=true (excepción documentada de la plantilla)
+# .npmrc lleva solo comentarios (sin overrides: la integración nestjs-zod está
+# vendorizada) y vendor/ es la copia local que npm instala con file:
 COPY package*.json .npmrc ./
+COPY vendor ./vendor/
 COPY prisma.config.ts ./
 COPY prisma ./prisma/
 
@@ -45,6 +47,7 @@ RUN apk add --no-cache openssl
 RUN mkdir -p /app/data && chown -R node:node /app
 
 COPY --chown=node:node package*.json .npmrc ./
+COPY --chown=node:node vendor ./vendor/
 COPY --chown=node:node prisma.config.ts ./
 COPY --chown=node:node prisma ./prisma/
 COPY --chown=node:node docker-entrypoint.sh ./

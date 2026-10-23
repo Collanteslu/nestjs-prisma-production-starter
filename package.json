@@ -53,7 +53,7 @@
     "dotenv": "^18.0.9",
     "helmet": "^8.3.0",
     "nestjs-pino": "^5.3.1",
-    "nestjs-zod": "^5.5.0",
+    "nestjs-zod": "file:./vendor/nestjs-zod",
     "nodemailer": "^10.2.1",
     "pino": "^10.4.0",
     "prisma": "^7.10.1",

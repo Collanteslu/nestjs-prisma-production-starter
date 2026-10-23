@@ -12,15 +12,21 @@ export interface MailMessage {
 }
 
 /**
- * Nodemailer options for the configured environment. In production TLS is MANDATORY:
- * `smtps://` delivers over implicit TLS, and plain `smtp://` (the usual submission port
- * 587) is forced to upgrade with STARTTLS — nodemailer then refuses to send in
- * plaintext, and the env validation rejects URLs that disable certificate verification
- * (`ignoreTLS=true`, `rejectUnauthorized=false`). Outside production no option is set so
- * local/dev plaintext sinks (the contract harness on :2525) keep working.
+ * Transport configuration for the configured environment. In production TLS is
+ * MANDATORY: `smtps://` delivers over implicit TLS, and plain `smtp://` (the usual
+ * submission port 587) is forced to upgrade with STARTTLS — nodemailer then refuses to
+ * send in plaintext (`requireTLS` takes precedence over `ignoreTLS`/
+ * `opportunisticTLS`), and the env validation rejects URLs that disable certificate
+ * verification (`ignoreTLS=true`, `rejectUnauthorized=false`). Outside production no
+ * option is set so local/dev plaintext sinks (the contract harness on :2525) keep working.
+ *
+ * Options travel in the FIRST argument (`{ url, requireTLS }`): nodemailer 10's typings
+ * type the second argument as mail defaults, not transport options.
  */
-export function smtpTransportOptions(env: Env): { requireTLS?: boolean } {
-  return env.NODE_ENV === "production" ? { requireTLS: true } : {};
+export function smtpTransportConfig(env: Env): { url: string; requireTLS?: boolean } {
+  // SMTP_URL is guaranteed non-empty by env validation when MAIL_TRANSPORT=smtp
+  const url = env.SMTP_URL as string;
+  return env.NODE_ENV === "production" ? { url, requireTLS: true } : { url };
 }
 
 /**
@@ -78,8 +84,7 @@ export class MailService {
           return true;
         case "smtp":
           this.smtp ??= (await import("nodemailer")).default.createTransport(
-            this.env.SMTP_URL,
-            smtpTransportOptions(this.env),
+            smtpTransportConfig(this.env),
           );
           await this.smtp.sendMail({ from: this.env.MAIL_FROM, ...message });
           return true;

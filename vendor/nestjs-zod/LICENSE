@@ -1,0 +1,43 @@
+nestjs-zod (vendored copy)
+==========================
+
+Source: https://github.com/BenLorantfy/nestjs-zod (package `nestjs-zod`, version 5.5.0)
+Upstream license: MIT (reproduced below).
+
+What this vendored copy changes and why
+---------------------------------------
+Only `peerDependencies` and `peerDependenciesMeta` were REMOVED from package.json.
+Upstream declares `@nestjs/common ^10 || ^11` and `@nestjs/swagger ^7 || ^8 || ^11`,
+which do not cover the NestJS 12 / Swagger 12 stack of this template — that mismatch
+is what forced `legacy-peer-deps=true` in `.npmrc`, hiding ALL peer conflicts on
+every install. The runtime code (`dist/`) is byte-identical to upstream; every
+declared peer is satisfied by this project's own dependencies, so the install
+disagreement had no runtime meaning. With the peers gone, npm resolves the tree
+strictly again and `.npmrc` needs no override.
+
+Do not edit `dist/`. When upstream publishes a release whose peers include
+Nest/Swagger 12, delete this folder and depend on the registry version again
+(the AGENTS.md "Stack" section records the same exit criteria).
+
+MIT License
+
+Copyright (c) 2022 Evgeny Z.
+Copyright (c) 2024 Benjamin Lorantfy
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

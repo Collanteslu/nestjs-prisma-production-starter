@@ -1,5 +1,5 @@
 import { EnvValidationError, parseEnv } from "../src/config/env";
-import { smtpTransportOptions } from "../src/mail/mail.service";
+import { smtpTransportConfig } from "../src/mail/mail.service";
 
 /**
  * Startup guards added by the security review: production must refuse configurations that
@@ -133,7 +133,8 @@ describe("env guards (fail-fast configuration)", () => {
     });
 
     it("forces requireTLS only in production (local plaintext sinks keep working)", () => {
-      expect(smtpTransportOptions(parseEnv(withSmtp("smtp://127.0.0.1:2525")))).toEqual({
+      expect(smtpTransportConfig(parseEnv(withSmtp("smtp://127.0.0.1:2525")))).toEqual({
+        url: "smtp://127.0.0.1:2525",
         requireTLS: true,
       });
       const dev = parseEnv({
@@ -142,7 +143,7 @@ describe("env guards (fail-fast configuration)", () => {
         MAIL_TRANSPORT: "smtp",
         SMTP_URL: "smtp://127.0.0.1:2525",
       });
-      expect(smtpTransportOptions(dev)).toEqual({});
+      expect(smtpTransportConfig(dev)).toEqual({ url: "smtp://127.0.0.1:2525" }); // no TLS forced
     });
   });
 

@@ -10,18 +10,19 @@ optionally Turso) · Zod 4 + `nestjs-zod` · Jest + supertest · ESLint + Pretti
 Node.js 24 (`engines.node >=24.9`; the Docker base image is `node:24-alpine`, pinned
 by digest).
 
-`.npmrc` sets `legacy-peer-deps=true` for ONE documented reason: `nestjs-zod@5.5.0`
-(the latest release) declares peers `@nestjs/common ^10 || ^11` and `@nestjs/swagger
-^7 || ^8 || ^11`, while this template runs Nest and Swagger **12** — npm would refuse
-the install otherwise. The incompatibility is contained by a multi-layer safety net
-that runs on every change: `npm run typecheck` and `npm run build` against the real
-types, the Jest suite (which validates the generated document with
-`@apidevtools/swagger-parser`), and the contract harness (which pins the document's
-paths, schemes and responses per mode) — all in CI. **Exit criteria:** when Dependabot
-proposes a `nestjs-zod` release whose peers include Nest/Swagger 12, upgrade it and
-delete `legacy-peer-deps` from `.npmrc`; until then do not remove the flag (the install
-would break) and do not upgrade `@nestjs/swagger` past the peer range without running
-the full suite.
+**No install overrides.** npm resolves the tree strictly: there is no
+`legacy-peer-deps`. The one package that forced it — `nestjs-zod`, whose published
+peers stop at Nest/Swagger 11 — is **vendored** at `vendor/nestjs-zod` (byte-identical
+`dist/` of 5.5.0, MIT, attribution in its `LICENSE`) with only `peerDependencies`
+removed: every declared peer is satisfied by this project's own dependencies, so the
+installer disagreement had no runtime meaning, while the strict install now surfaces
+ANY real conflict instead of hiding them behind the flag. **Exit criteria:** when
+Dependabot proposes a `nestjs-zod` release whose peers include Nest/Swagger 12,
+delete `vendor/nestjs-zod` and depend on the registry version again. The
+integration is covered by the safety net that runs on every change:
+`npm run typecheck` and `npm run build` against the real types, the Jest suite
+(which validates the generated document with `@apidevtools/swagger-parser`), and the
+contract harness (108 document/response pins across the three modes) — all in CI.
 
 ## Install and run
 
