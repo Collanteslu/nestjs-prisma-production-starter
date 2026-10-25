@@ -104,10 +104,7 @@ export class TotpService {
     for (const step of [now - 1, now, now + 1]) {
       // No early return: every candidate is compared so timing does not leak which one matched
       const expected = Buffer.from(this.hotp(secret, step));
-      if (
-        timingSafeEqual(expected, Buffer.from(code)) &&
-        (lastStep === null || step > lastStep)
-      ) {
+      if (timingSafeEqual(expected, Buffer.from(code)) && (lastStep === null || step > lastStep)) {
         matched = step;
       }
     }

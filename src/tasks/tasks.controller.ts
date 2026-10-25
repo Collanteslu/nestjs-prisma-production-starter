@@ -279,11 +279,7 @@ export class TasksController {
   @ApiBadRequestResponse({ description: "Error de validación" })
   @ApiUnauthorizedResponse({ description: "Token ausente, inválido o sesión revocada" })
   @ApiNotFoundResponse({ description: "Tarea no encontrada (o pertenece a otro usuario)" })
-  async update(
-    @Param() params: IdParam,
-    @Body() changes: UpdateTaskRequest,
-    @Req() req: Request,
-  ) {
+  async update(@Param() params: IdParam, @Body() changes: UpdateTaskRequest, @Req() req: Request) {
     const { id } = params;
     const viewer = this.viewerOf(req);
     await this.findOwnedTask(id, viewer, { allowDeleted: false });
@@ -357,11 +353,7 @@ export class TasksController {
   @ApiNotFoundResponse({
     description: "Tarea no encontrada (o ya eliminada, salvo con `permanent=true`)",
   })
-  async remove(
-    @Param() params: IdParam,
-    @Query() query: PermanentQuery,
-    @Req() req: Request,
-  ) {
+  async remove(@Param() params: IdParam, @Query() query: PermanentQuery, @Req() req: Request) {
     const { id } = params;
     const isPermanent = query.permanent === "true";
     const viewer = this.viewerOf(req);

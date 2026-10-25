@@ -53,10 +53,7 @@ export class CleanupService {
         //    token is still detected as reuse because it no longer matches any stored hash.
         this.prisma.refreshToken.deleteMany({
           where: {
-            OR: [
-              { expiresAt: { lt: now } },
-              { usedAt: { lt: new Date(now.getTime() - DAY_MS) } },
-            ],
+            OR: [{ expiresAt: { lt: now } }, { usedAt: { lt: new Date(now.getTime() - DAY_MS) } }],
           },
         }),
       ]);
@@ -66,10 +63,7 @@ export class CleanupService {
       // Emailed tokens past their expiry (or used more than a day ago) are of no further use
       await this.prisma.authToken.deleteMany({
         where: {
-          OR: [
-            { expiresAt: { lt: now } },
-            { usedAt: { lt: new Date(now.getTime() - DAY_MS) } },
-          ],
+          OR: [{ expiresAt: { lt: now } }, { usedAt: { lt: new Date(now.getTime() - DAY_MS) } }],
         },
       });
       // Used MFA recovery codes can never work again; unused ones stay until 2FA is reset
@@ -101,7 +95,12 @@ export class CleanupService {
         })
       ).count;
 
-      if (sessionsRes.count > 0 || tokensRes.count > 0 || deletedAuditLogs > 0 || deletedOutbox > 0) {
+      if (
+        sessionsRes.count > 0 ||
+        tokensRes.count > 0 ||
+        deletedAuditLogs > 0 ||
+        deletedOutbox > 0
+      ) {
         this.logger.log(
           `Cleanup routine purged expired sessions, tokens and old audit entries ` +
             `(sessions=${sessionsRes.count}, tokens=${tokensRes.count}, ` +

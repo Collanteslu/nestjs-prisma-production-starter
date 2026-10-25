@@ -116,10 +116,7 @@ export default {
             ? await ctx.req("POST", "/api/tasks", { body: { title: "" }, token: null })
             : await ctx.get("/api/tasks", { token: null });
         ctx.status(res, ctx.mode === "none" ? 400 : 401);
-        ctx.ok(
-          !!res.headers["x-request-id"],
-          "x-request-id must exist on the error response",
-        );
+        ctx.ok(!!res.headers["x-request-id"], "x-request-id must exist on the error response");
         ctx.ok(
           !!res.headers["server-timing"] || !!res.headers["x-response-time"],
           "timing headers must exist on the error response",

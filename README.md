@@ -47,11 +47,11 @@ The API listens at <http://localhost:3011>. In development, the empty database i
 
 ## Authentication modes
 
-| Mode | Available surface |
-| --- | --- |
+| Mode             | Available surface                                                         |
+| ---------------- | ------------------------------------------------------------------------- |
 | `full` (default) | Auth, recovery, email verification, MFA, sessions, users, tasks and audit |
-| `basic` | Registration, login, refresh/logout, sessions, users, tasks and audit |
-| `none` | Public tasks and system endpoints; no auth or user routes |
+| `basic`          | Registration, login, refresh/logout, sessions, users, tasks and audit     |
+| `none`           | Public tasks and system endpoints; no auth or user routes                 |
 
 The Prisma schema is the same in each mode. `AUTH_MODE` is read at startup, so restart the server after changing it. See [AGENTS.md](AGENTS.md) for the full route and configuration behavior.
 

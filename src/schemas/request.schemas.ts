@@ -26,8 +26,7 @@ const passwordField = z
   .min(8, { message: "Password must be at least 8 characters long" })
   .max(72, { message: "Password cannot exceed 72 characters" })
   .refine((value) => Buffer.byteLength(value, "utf8") <= 72, {
-    message:
-      "Password cannot exceed 72 bytes (accented characters and emoji take more than one)",
+    message: "Password cannot exceed 72 bytes (accented characters and emoji take more than one)",
   })
   .meta({ example: "password123" });
 

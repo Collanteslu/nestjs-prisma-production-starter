@@ -53,17 +53,15 @@ export class AppModule implements NestModule {
    * prefixes, so it can demand a token unconditionally.
    */
   configure(consumer: MiddlewareConsumer): void {
-    consumer
-      .apply(AuthPrefixMiddleware)
-      .forRoutes(
-        // Each protected prefix and all its sub-paths. Nest registers class middleware per
-        // matched route (not via Express `use()`), so the sub-path wildcard is explicit.
-        // In Express 5 / path-to-regexp v8 the wildcard is `{*splat}`.
-        ...["api/sessions", "api/users", "api/tasks", "api/audit-logs"].flatMap((prefix) => [
-          { path: prefix, method: RequestMethod.ALL },
-          { path: `${prefix}/{*splat}`, method: RequestMethod.ALL },
-        ]),
-      );
+    consumer.apply(AuthPrefixMiddleware).forRoutes(
+      // Each protected prefix and all its sub-paths. Nest registers class middleware per
+      // matched route (not via Express `use()`), so the sub-path wildcard is explicit.
+      // In Express 5 / path-to-regexp v8 the wildcard is `{*splat}`.
+      ...["api/sessions", "api/users", "api/tasks", "api/audit-logs"].flatMap((prefix) => [
+        { path: prefix, method: RequestMethod.ALL },
+        { path: `${prefix}/{*splat}`, method: RequestMethod.ALL },
+      ]),
+    );
   }
 
   static forRoot(env: Env): DynamicModule {

@@ -22,7 +22,10 @@ describe("EmailOutboxService delivery policy", () => {
     createdAt: Date;
   }
 
-  const buildPrisma = (rows: Row[], users: Map<string, { id: string; deletedAt: Date | null; isBlocked: boolean } | null>) => {
+  const buildPrisma = (
+    rows: Row[],
+    users: Map<string, { id: string; deletedAt: Date | null; isBlocked: boolean } | null>,
+  ) => {
     const store = {
       emailOutbox: {
         create: jest.fn(async ({ data }: { data: { userId: string; type: string } }) => {
@@ -47,35 +50,47 @@ describe("EmailOutboxService delivery policy", () => {
           );
           return due ?? null;
         }),
-        updateMany: jest.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
-          if ("status" in where && "id" in where) {
-            const row = rows.find((r) => r.id === (where as { id: string }).id);
-            if (!row || row.status !== where.status) return { count: 0 };
-            Object.assign(row, data);
-            return { count: 1 };
-          }
-          if ((where as { status?: string }).status === "sending") {
-            // stale-claim reclaim
-            let count = 0;
-            for (const row of rows) {
-              if (row.status === "sending") {
-                Object.assign(row, data);
-                count += 1;
-              }
+        updateMany: jest.fn(
+          async ({
+            where,
+            data,
+          }: {
+            where: Record<string, unknown>;
+            data: Record<string, unknown>;
+          }) => {
+            if ("status" in where && "id" in where) {
+              const row = rows.find((r) => r.id === (where as { id: string }).id);
+              if (!row || row.status !== where.status) return { count: 0 };
+              Object.assign(row, data);
+              return { count: 1 };
             }
-            return { count };
-          }
-          return { count: 0 };
-        }),
-        update: jest.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
-          const row = rows.find((r) => r.id === where.id);
-          if (!row) throw new Error("missing row");
-          Object.assign(row, data);
-          return row;
-        }),
+            if ((where as { status?: string }).status === "sending") {
+              // stale-claim reclaim
+              let count = 0;
+              for (const row of rows) {
+                if (row.status === "sending") {
+                  Object.assign(row, data);
+                  count += 1;
+                }
+              }
+              return { count };
+            }
+            return { count: 0 };
+          },
+        ),
+        update: jest.fn(
+          async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+            const row = rows.find((r) => r.id === where.id);
+            if (!row) throw new Error("missing row");
+            Object.assign(row, data);
+            return row;
+          },
+        ),
       },
       user: {
-        findUnique: jest.fn(async ({ where }: { where: { id: string } }) => users.get(where.id) ?? null),
+        findUnique: jest.fn(
+          async ({ where }: { where: { id: string } }) => users.get(where.id) ?? null,
+        ),
       },
     };
     return store as unknown as PrismaService;

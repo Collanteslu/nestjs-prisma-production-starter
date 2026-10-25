@@ -1,12 +1,4 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  HttpCode,
-  Inject,
-  Post,
-  Req,
-} from "@nestjs/common";
+import { BadRequestException, Body, Controller, HttpCode, Inject, Post, Req } from "@nestjs/common";
 import {
   ApiBadRequestResponse,
   ApiOkResponse,
@@ -111,7 +103,10 @@ export class RecoveryController {
       this.outbox.kick();
     });
 
-    return { message: "If an account exists for that email, a reset link has been sent.", data: null };
+    return {
+      message: "If an account exists for that email, a reset link has been sent.",
+      data: null,
+    };
   }
 
   /**
@@ -190,7 +185,12 @@ export class RecoveryController {
       where: { id: userId, emailVerifiedAt: null },
       data: { emailVerifiedAt: new Date() },
     });
-    await this.audit.record(req, { userId, action: "EMAIL_VERIFIED", entity: "User", entityId: userId });
+    await this.audit.record(req, {
+      userId,
+      action: "EMAIL_VERIFIED",
+      entity: "User",
+      entityId: userId,
+    });
     return { message: "Email verified.", data: null };
   }
 
@@ -229,6 +229,9 @@ export class RecoveryController {
       this.outbox.kick();
     });
 
-    return { message: "If the account exists and is not verified, a new link has been sent.", data: null };
+    return {
+      message: "If the account exists and is not verified, a new link has been sent.",
+      data: null,
+    };
   }
 }

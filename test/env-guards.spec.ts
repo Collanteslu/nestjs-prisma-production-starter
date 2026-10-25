@@ -89,7 +89,7 @@ describe("env guards (fail-fast configuration)", () => {
       expect(env.CORS_ALLOW_WILDCARD).toBe(true);
     });
 
-    it('accepts an explicit origin list without the opt-in', () => {
+    it("accepts an explicit origin list without the opt-in", () => {
       const env = parseEnv({
         ...production,
         MFA_ENCRYPTION_KEY: "k".repeat(40),

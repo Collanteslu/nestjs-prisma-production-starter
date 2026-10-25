@@ -4,3 +4,5 @@ coverage/
 package-lock.json
 dev.db*
 *.db
+# Vendored third-party code keeps its upstream formatting
+vendor/

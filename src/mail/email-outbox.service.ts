@@ -53,7 +53,10 @@ export class EmailOutboxService {
    * Prisma write that creates the delivery intent — returns the operation so callers can
    * put it in the same `$transaction` as their audit entry.
    */
-  enqueueOp(userId: string, type: AuthTokenType): ReturnType<PrismaService["emailOutbox"]["create"]> {
+  enqueueOp(
+    userId: string,
+    type: AuthTokenType,
+  ): ReturnType<PrismaService["emailOutbox"]["create"]> {
     this.metrics.enqueued += 1;
     return this.prisma.emailOutbox.create({ data: { userId, type } });
   }

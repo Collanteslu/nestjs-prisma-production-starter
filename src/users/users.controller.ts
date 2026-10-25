@@ -119,10 +119,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: "Parámetros o filtros inválidos" })
   @ApiUnauthorizedResponse({ description: "Token ausente, inválido o sesión revocada" })
   @ApiForbiddenResponse({ description: "Requiere rol administrador" })
-  async list(
-    @Query() dto: UserQuery,
-    @Query() rawQuery: Record<string, string | undefined>,
-  ) {
+  async list(@Query() dto: UserQuery, @Query() rawQuery: Record<string, string | undefined>) {
     const { page, limit, search, role, isBlocked, sortBy, order, sort, includeDeleted } = dto;
     const skip = (page - 1) * limit;
 
@@ -223,7 +220,8 @@ export class UsersController {
   @UseGuards(AdminGuard)
   @ApiOperation({
     summary: "Crear usuario (Solo Admin)",
-    description: "Permite asignar cualquier rol. El registro público está en `POST /api/auth/register`.",
+    description:
+      "Permite asignar cualquier rol. El registro público está en `POST /api/auth/register`.",
   })
   @ApiCreatedResponse({ description: "Usuario creado" })
   @ApiBadRequestResponse({ description: "Error de validación" })
@@ -289,7 +287,9 @@ export class UsersController {
     const { id } = params;
 
     if (currentUser.userId === id) {
-      throw new BadRequestException("Invalid action: Administrators cannot suspend their own account.");
+      throw new BadRequestException(
+        "Invalid action: Administrators cannot suspend their own account.",
+      );
     }
 
     const targetUser = await this.prisma.user.findUnique({ where: { id } });
@@ -466,7 +466,9 @@ export class UsersController {
   })
   @ApiNotFoundResponse({ description: "Usuario no encontrado" })
   @ApiConflictResponse({ description: "Email en uso" })
-  @ApiTooManyRequestsResponse({ description: "Demasiadas confirmaciones de contraseña incorrectas" })
+  @ApiTooManyRequestsResponse({
+    description: "Demasiadas confirmaciones de contraseña incorrectas",
+  })
   async update(
     @Param() params: IdParam,
     @Body() dto: UpdateUserRequest,
@@ -515,7 +517,10 @@ export class UsersController {
     }
 
     if (email && email !== existingUser.email) {
-      const emailTaken = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+      const emailTaken = await this.prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
       if (emailTaken) {
         throw new ConflictException(`Email '${email}' is already in use by another account.`);
       }
@@ -563,7 +568,10 @@ export class UsersController {
         this.outbox.kick();
       });
       inBackground(() =>
-        this.accountMail.sendEmailChangedNotice({ name: updatedUser.name, email: existingUser.email }),
+        this.accountMail.sendEmailChangedNotice({
+          name: updatedUser.name,
+          email: existingUser.email,
+        }),
       );
     }
 

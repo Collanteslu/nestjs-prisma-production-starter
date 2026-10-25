@@ -30,7 +30,9 @@ export class AuditService {
     options: LogAuditOptions,
   ): ReturnType<PrismaService["auditLog"]["create"]> {
     const details =
-      typeof options.details === "object" ? JSON.stringify(options.details) : options.details || null;
+      typeof options.details === "object"
+        ? JSON.stringify(options.details)
+        : options.details || null;
 
     return this.prisma.auditLog.create({
       data: {

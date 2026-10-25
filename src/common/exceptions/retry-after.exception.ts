@@ -20,7 +20,11 @@ export class RateLimitedException extends HttpException {
  * top-level `retryAfterSeconds`).
  */
 export class RetryAfterException extends HttpException {
-  constructor(message: string, status: number, readonly retryAfterSeconds: number) {
+  constructor(
+    message: string,
+    status: number,
+    readonly retryAfterSeconds: number,
+  ) {
     super(message, status);
   }
 }
