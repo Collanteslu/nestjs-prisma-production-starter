@@ -15,7 +15,7 @@ interface LocalBucket {
 }
 
 /**
- * Global, metadata-driven rate limiter (the reference mounts `rateLimiter(name, windowMs, max)`
+ * Global, metadata-driven rate limiter (the Hono starter mounts `rateLimiter(name, windowMs, max)`
  * middleware on the same routes). Counters live in the database, so limits are shared by every
  * instance.
  *

@@ -213,7 +213,7 @@ export class UsersController {
 
   /**
    * POST /api/users
-   * Creates a new user with bcrypt-hashed credentials (Admin only).
+   * Creates a new user with Argon2id-hashed credentials (Admin only).
    * Public self-service sign-up is available at POST /api/auth/register.
    */
   @Post()

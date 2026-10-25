@@ -4,7 +4,7 @@ import type { Env } from "../config/env";
 export const RATE_LIMIT_KEY = "rateLimit";
 
 /**
- * Named rate limiters with the reference's windows/limits. The limits come from the
+ * Named rate limiters with the Hono starter's windows/limits. The limits come from the
  * injected env at REQUEST time (decorators run at import time, where no config exists).
  */
 export const RATE_LIMITS = {
@@ -42,5 +42,5 @@ export const CRITICAL_RATE_LIMITS = new Set<RateLimitName>([
   "mfa",
 ]);
 
-/** Applies the named DB-backed rate limiter to a route (reference middleware parity). */
+/** Applies the named DB-backed rate limiter to a route (Hono middleware parity). */
 export const RateLimit = (name: RateLimitName) => SetMetadata(RATE_LIMIT_KEY, name);

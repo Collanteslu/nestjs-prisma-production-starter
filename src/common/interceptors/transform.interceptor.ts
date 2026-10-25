@@ -21,7 +21,7 @@ function isEnvelopeParts(body: unknown): body is EnvelopeParts {
 }
 
 /**
- * Standard response envelope (parity with the reference API):
+ * Standard response envelope (parity with the Hono starter API):
  *
  *   { success: true, message?, data, pagination?, meta: {requestId, timestamp, durationMs, apiVersion} }
  *

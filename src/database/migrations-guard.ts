@@ -45,7 +45,7 @@ function localMigrationNames(): string[] {
 export async function assertMigrationsUpToDate(prisma: PrismaService): Promise<void> {
   const local = localMigrationNames();
   if (local.length === 0) {
-    // Nothing to compare against (e.g. a packaging mistake): keep booting, like the reference.
+    // Nothing to compare against (e.g. a packaging mistake): keep booting, like the Hono starter.
     return;
   }
 

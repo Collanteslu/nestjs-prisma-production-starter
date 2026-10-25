@@ -1,7 +1,7 @@
 import { HttpException } from "@nestjs/common";
 
 /**
- * 429 produced by the DB-backed rate limiter. The reference body carries
+ * 429 produced by the DB-backed rate limiter. The Hono starter body carries
  * `retryAfterSeconds` at the TOP level (instead of the usual `details`) plus a
  * `Retry-After` header; the global filter renders both.
  */

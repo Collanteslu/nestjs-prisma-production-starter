@@ -53,7 +53,7 @@ interface Viewer {
 /**
  * Task management CRUD routes with strict user ownership and pagination.
  *
- * Security model (parity with the reference):
+ * Security model (parity with the Hono starter):
  * - Standard users can ONLY read, create, update and delete tasks they own; a foreign
  *   task answers exactly like a missing one (404), so IDs cannot be probed.
  * - Soft-deleted tasks are hidden (404) unless `?includeDeleted=true` or restored.

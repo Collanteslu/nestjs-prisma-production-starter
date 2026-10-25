@@ -7,7 +7,7 @@ import {
   userQuerySchema,
 } from "../../schemas/request.schemas";
 
-/** DTOs validated by the global ContractValidationPipe; class names match the reference components. */
+/** DTOs validated by the global ContractValidationPipe; class names match the Hono starter components. */
 export class UserQuery extends createZodDto(userQuerySchema) {}
 export class CreateUserRequest extends createZodDto(createUserSchema) {}
 export class UpdateUserRequest extends createZodDto(updateUserSchema) {}

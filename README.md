@@ -86,6 +86,15 @@ docker compose up --build
 
 Compose stores the local SQLite database in a named volume and applies versioned migrations at startup. For production, configure stable signing secrets, a persistent database, trusted proxy settings and (for `AUTH_MODE=full`) a real SMTP transport and HTTPS `APP_URL`. See [.env.example](.env.example) for all options.
 
+The image is based on `node:24-alpine` (pinned by digest) and is built to run with a read-only root filesystem: the Prisma schema engine is downloaded when the image is built, not on first start, and the runtime image has no npm, corepack or yarn. The Compose file already runs it with `read_only`, `cap_drop: ALL`, `no-new-privileges` and the port bound to `127.0.0.1`. To check a build the way production runs it (read-only filesystem, migrations, admin login, `HEALTHCHECK`, non-root user):
+
+```bash
+docker build -t nestjs-api:ci .
+scripts/docker-smoke.sh nestjs-api:ci
+```
+
+The entrypoint validates the environment before it applies any migration, so a missing secret stops the container without touching the database. In production the logs are plain text (no ANSI colours); the API documentation at `/docs` and the link to it on `GET /` are off unless you set `ENABLE_DOCS=true`.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

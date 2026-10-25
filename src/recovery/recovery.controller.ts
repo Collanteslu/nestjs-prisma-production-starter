@@ -33,7 +33,7 @@ const EMAILS_PER_ADDRESS_PER_HOUR = 3;
 
 /**
  * Password recovery and email verification (mounted under /api/auth; exists only when
- * `features.accountSecurity`, i.e. AUTH_MODE=full — route parity with the reference's
+ * `features.accountSecurity`, i.e. AUTH_MODE=full — route parity with the Hono starter's
  * routes/recovery.ts). Requests that start a flow always answer the same whether or not
  * the account exists, and the email is sent in the background, so neither the body nor
  * the latency reveals which addresses exist.
