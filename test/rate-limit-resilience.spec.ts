@@ -38,8 +38,7 @@ function fakeContext(ip = "203.0.113.7") {
   return { ctx, headers };
 }
 
-const reflectorFor = (name: string) =>
-  ({ getAllAndOverride: () => name }) as unknown as Reflector;
+const reflectorFor = (name: string) => ({ getAllAndOverride: () => name }) as unknown as Reflector;
 
 describe("RateLimitGuard: store outage", () => {
   it("keeps enforcing the critical limits from a local window (default mode)", async () => {

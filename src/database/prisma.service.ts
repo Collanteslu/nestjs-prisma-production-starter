@@ -26,7 +26,7 @@ export function resolveDatabaseUrl(env: Env): string {
 }
 
 /**
- * Prisma 7 client (libsql driver adapter) with the reference's production defaults:
+ * Prisma 7 client (libsql driver adapter) with the Hono starter's production defaults:
  * - passwords, TOTP secrets and the last accepted TOTP step are omitted from every query
  *   (opt in explicitly, e.g. `omit: { password: false }`);
  * - the adapter waits up to 5s for the single SQLite writer instead of failing with
@@ -72,7 +72,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnAppli
    * remote databases.
    *
    * `PRAGMA foreign_keys` is already ON on this adapter's connections (verified empirically
-   * in the reference implementation), so the schema's onDelete: Cascade / SetNull relations
+   * in the Hono starter), so the schema's onDelete: Cascade / SetNull relations
    * do fire and dependents never need manual deletes.
    */
   async applySqlitePragmas(): Promise<void> {

@@ -10,7 +10,7 @@ import { PrismaService } from "./prisma.service";
  * Seeds initial demo accounts and tasks with hashed passwords if the database is empty.
  * Security: disabled in production to prevent hardcoded demo credentials.
  *
- * Demo data is intentionally IDENTICAL to the reference implementation: the contract
+ * Demo data is intentionally IDENTICAL to the Hono starter: the contract
  * suite pins seeded ids and titles (e.g. "Design Frontend UI"), so the fixtures must
  * match byte-for-byte to demonstrate parity.
  */

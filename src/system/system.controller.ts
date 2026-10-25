@@ -1,7 +1,7 @@
 import { Controller, Get, Inject } from "@nestjs/common";
 import { ApiExcludeController, ApiOperation } from "@nestjs/swagger";
-import type { Features } from "../config/env";
-import type { Env } from "../config/env";
+import { docsEnabled } from "../config/env";
+import type { Env, Features } from "../config/env";
 import { APP_ENV, APP_FEATURES } from "../config/tokens";
 import { Public } from "../common/decorators/public.decorator";
 import { NoEnvelope } from "../common/decorators/envelope.decorator";
@@ -9,7 +9,7 @@ import { API_VERSION } from "../instrumentation/request-context";
 
 /**
  * Root welcome and overview endpoint: lists only the endpoints mounted for the
- * current AUTH_MODE (same shape and wording as the reference).
+ * current AUTH_MODE (same shape and wording as the Hono starter).
  */
 @ApiExcludeController()
 @Controller()
@@ -25,15 +25,18 @@ export class SystemController {
   @ApiOperation({ summary: "Overview of the mounted endpoints" })
   index(): Record<string, unknown> {
     const { auth, accountSecurity } = this.features;
+    // /docs only exists when the documentation is enabled (off by default in production):
+    // do not advertise a link that answers 404
+    const docs = docsEnabled(this.env);
     return {
       status: "online",
       name: "Production REST API Template with NestJS, Prisma 7, SQLite & Stateful Sessions",
       version: API_VERSION,
       authMode: this.env.AUTH_MODE,
-      documentationUrl: "/docs",
+      ...(docs && { documentationUrl: "/docs" }),
       endpoints: {
         healthcheck: "/healthz",
-        documentation: "/docs",
+        ...(docs && { documentation: "/docs" }),
         ...(auth && {
           auth: {
             register: "POST /api/auth/register",

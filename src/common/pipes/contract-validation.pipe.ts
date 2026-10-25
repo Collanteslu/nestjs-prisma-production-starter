@@ -6,7 +6,7 @@ import type { ZodError } from "zod";
 import { VALIDATION_MESSAGE, groupZodIssues } from "../error-payload";
 
 /**
- * Reference parity: the message of a validation 400 depends on WHERE the failure
+ * Parity with the Hono starter: the message of a validation 400 depends on WHERE the failure
  * happened (`defaultHook` in the original):
  *
  *   body  → "Validation error in request payload"
@@ -15,7 +15,7 @@ import { VALIDATION_MESSAGE, groupZodIssues } from "../error-payload";
  *
  * nestjs-zod's ZodValidationException only carries the ZodError, so the wrapper
  * rethrows an HttpException carrying the target-specific message plus the issues
- * grouped by field (same shape as `formatIssues` in the reference).
+ * grouped by field (same shape as `formatIssues` in the Hono starter).
  */
 @Injectable()
 export class ContractValidationPipe implements PipeTransform {

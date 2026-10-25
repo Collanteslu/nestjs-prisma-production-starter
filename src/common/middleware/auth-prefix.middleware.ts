@@ -6,16 +6,16 @@ import type { Features } from "../../config/env";
 import { APP_FEATURES } from "../../config/tokens";
 
 /**
- * Port of the reference's route-prefix auth mounting:
+ * Port of the Hono starter's route-prefix auth mounting:
  *   app.use("/api/users", authMiddleware);
  *   app.use("/api/users/*", authMiddleware);
  * (the four protected prefixes are /api/sessions, /api/users, /api/tasks, /api/audit-logs).
  *
- * In the reference the middleware guards the prefix AND every sub-path, so a request to a
+ * In the Hono starter the middleware guards the prefix AND every sub-path, so a request to a
  * sub-path that no route matches still runs authentication and answers 401 without a token
  * (404 is only reached once authenticated). A global Nest guard only runs on *matched*
  * routes, so without this middleware an unauthenticated probe of an unmounted sub-path would
- * leak 404 and diverge from the reference. This keeps the same observable behaviour:
+ * leak 404 and diverge from the Hono starter. This keeps the same observable behaviour:
  * authentication is enforced for the protected prefixes and all their sub-paths.
  *
  * `authenticate` is the same shared logic the global JwtAuthGuard uses, so the payload

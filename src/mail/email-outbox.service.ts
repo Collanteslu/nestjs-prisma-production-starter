@@ -5,9 +5,13 @@ import { PrismaService } from "../database/prisma.service";
 import { AccountMailService } from "./account-mail.service";
 import type { AuthTokenType } from "./auth-tokens.service";
 
-/** Backoff between delivery attempts (5 attempts span ≈ 15 minutes) */
-const RETRY_BACKOFF_MS = [30_000, 60_000, 120_000, 240_000, 480_000];
-const MAX_ATTEMPTS = RETRY_BACKOFF_MS.length;
+/**
+ * Waits between delivery attempts: after failure n the row is retried RETRY_BACKOFF_MS[n - 1]
+ * later. There is one wait fewer than attempts (the last failure gives up instead of
+ * waiting), so 5 attempts span 30 s + 1 min + 2 min + 4 min = 7.5 minutes in total.
+ */
+const RETRY_BACKOFF_MS = [30_000, 60_000, 120_000, 240_000];
+const MAX_ATTEMPTS = RETRY_BACKOFF_MS.length + 1;
 /** A row stuck in `sending` this long means the worker died mid-delivery: claim it again */
 const CLAIM_TIMEOUT_MS = 5 * 60_000;
 const POLL_INTERVAL_MS = 30_000;
@@ -53,7 +57,10 @@ export class EmailOutboxService {
    * Prisma write that creates the delivery intent — returns the operation so callers can
    * put it in the same `$transaction` as their audit entry.
    */
-  enqueueOp(userId: string, type: AuthTokenType): ReturnType<PrismaService["emailOutbox"]["create"]> {
+  enqueueOp(
+    userId: string,
+    type: AuthTokenType,
+  ): ReturnType<PrismaService["emailOutbox"]["create"]> {
     this.metrics.enqueued += 1;
     return this.prisma.emailOutbox.create({ data: { userId, type } });
   }

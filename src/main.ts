@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { Logger } from "@nestjs/common";
-import type { INestApplication, LogLevel } from "@nestjs/common";
+import type { INestApplication } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
@@ -11,27 +11,10 @@ import { SeedService } from "./database/seed.service";
 import { assertMigrationsUpToDate } from "./database/migrations-guard";
 import { CleanupService } from "./jobs/cleanup.service";
 import { EmailOutboxService } from "./mail/email-outbox.service";
+import { createAppLogger } from "./logging";
 
 /**
- * LOG_LEVEL (trace…fatal|silent, the same vocabulary the reference uses for its logger)
- * mapped onto Nest's logger levels: Nest has no `fatal` (it maps to `error`) and no `trace`
- * (it maps to `verbose`).
- */
-function nestLogLevels(level: string | undefined): LogLevel[] {
-  const levels: Record<string, LogLevel[]> = {
-    silent: [],
-    fatal: ["error"],
-    error: ["error"],
-    warn: ["warn", "error"],
-    info: ["log", "warn", "error"],
-    debug: ["debug", "log", "warn", "error"],
-    trace: ["verbose", "debug", "log", "warn", "error"],
-  };
-  return levels[level ?? "info"] ?? levels.info;
-}
-
-/**
- * Explicit boot order (same phases as the reference):
+ * Explicit boot order (same phases as the Hono starter):
  *   1. config (loadEnv, fail fast)          2. Nest create + HTTP wiring
  *   3. connect (PrismaService.onModuleInit) 4. SQLite pragmas
  *   5. migration-history guard              6. seed
@@ -41,7 +24,9 @@ async function bootstrap(): Promise<void> {
   const env = loadEnv();
   const features = featuresOf(env);
   // Apply LOG_LEVEL before any log statement (the boot warnings below included)
-  Logger.overrideLogger(nestLogLevels(env.LOG_LEVEL));
+  Logger.overrideLogger(
+    createAppLogger({ level: env.LOG_LEVEL, production: env.NODE_ENV === "production" }),
+  );
   const logger = new Logger("Bootstrap");
 
   // Configuration traps that would otherwise only surface as an incident: both are warnings, not
@@ -74,7 +59,7 @@ async function bootstrap(): Promise<void> {
   }
   await app.get(SeedService).run();
 
-  // Recurring cleanup job (initial non-blocking cycle + hourly unref'd timer), like the reference
+  // Recurring cleanup job (initial non-blocking cycle + hourly unref'd timer), like the Hono starter
   const cleanup = app.get(CleanupService);
   cleanup.start();
   // Durable email worker: polls the outbox and delivers with bounded retries. Only exists
@@ -93,7 +78,7 @@ async function bootstrap(): Promise<void> {
 
 /**
  * Graceful shutdown: close the HTTP server and disconnect Prisma; if the process is
- * still alive after 10s, force the exit (same policy as the reference).
+ * still alive after 10s, force the exit (same policy as the Hono starter).
  */
 function installShutdownHooks(app: INestApplication, stopJobs: () => void): void {
   const shutdown = (signal: NodeJS.Signals) => () => {

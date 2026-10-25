@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 /**
- * Zod v4 request schemas (port of the reference's `src/schemas/index.ts`).
+ * Zod v4 request schemas (port of the Hono starter's `src/schemas/index.ts`).
  * Component names in the spec come from the DTO class names (LoginRequest, ...), matching
- * the reference's `.openapi("Name")` registrations. `.meta()` carries examples/descriptions —
+ * the Hono starter's `.openapi("Name")` registrations. `.meta()` carries examples/descriptions —
  * NEVER `.meta({id})`: registering the root id in zod's globalRegistry makes zod emit the root
  * inside `$defs` and nestjs-zod's cleanupOpenApiDoc aborts on the mismatch (see health.dto.ts).
  */
@@ -18,7 +18,8 @@ const emailField = (formatMessage: string) =>
     .meta({ example: "ana@example.com" });
 
 /**
- * Política de contraseñas. bcrypt solo procesa los primeros 72 BYTES (no caracteres): una clave con
+ * Política de contraseñas. Los hashes bcrypt heredados (que se siguen verificando y se migran a
+ * Argon2id al iniciar sesión) solo procesan los primeros 72 BYTES (no caracteres): una clave con
  * tildes o emoji se truncaría en silencio, así que el límite real se comprueba en bytes UTF-8.
  */
 const passwordField = z
@@ -26,8 +27,7 @@ const passwordField = z
   .min(8, { message: "Password must be at least 8 characters long" })
   .max(72, { message: "Password cannot exceed 72 characters" })
   .refine((value) => Buffer.byteLength(value, "utf8") <= 72, {
-    message:
-      "Password cannot exceed 72 bytes (accented characters and emoji take more than one)",
+    message: "Password cannot exceed 72 bytes (accented characters and emoji take more than one)",
   })
   .meta({ example: "password123" });
 

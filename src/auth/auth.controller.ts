@@ -39,12 +39,7 @@ import { MfaService } from "../mfa/mfa.service";
 import { EmailOutboxService } from "../mail/email-outbox.service";
 import { SessionsService } from "../sessions/sessions.service";
 import type { RefreshTokenPayload } from "./auth.types";
-import {
-  LoginRequest,
-  LogoutRequest,
-  RefreshTokenRequest,
-  RegisterRequest,
-} from "./dto/auth.dtos";
+import { LoginRequest, LogoutRequest, RefreshTokenRequest, RegisterRequest } from "./dto/auth.dtos";
 import { TokensService } from "./tokens.service";
 
 @ApiTags("Auth")
@@ -132,10 +127,11 @@ export class AuthController {
       "Credenciales inválidas, o falta/es incorrecto el código 2FA (`details.code`: `MFA_REQUIRED` o `MFA_INVALID`)",
   })
   @ApiForbiddenResponse({
-    description:
-      "Cuenta suspendida, o email sin verificar (`details.code`: `EMAIL_NOT_VERIFIED`)",
+    description: "Cuenta suspendida, o email sin verificar (`details.code`: `EMAIL_NOT_VERIFIED`)",
   })
-  @ApiTooManyRequestsResponse({ description: "Rate limit excedido o cuenta bloqueada temporalmente" })
+  @ApiTooManyRequestsResponse({
+    description: "Rate limit excedido o cuenta bloqueada temporalmente",
+  })
   async login(@Body() dto: LoginRequest, @Req() req: Request) {
     const { email, password, totpCode, recoveryCode } = dto;
 
@@ -154,7 +150,8 @@ export class AuthController {
       omit: { password: false, totpSecret: false, totpLastStep: false },
     });
 
-    // Constant-time bcrypt comparison (always executed to prevent timing side-channel leaks)
+    // Constant-time password verification (always executed, against a dummy hash for unknown
+    // accounts, to prevent timing side-channel leaks)
     const isValidPassword = await comparePassword(
       password,
       user?.password ?? (await getDummyHash()),
@@ -181,7 +178,10 @@ export class AuthController {
     if (this.env.REQUIRE_EMAIL_VERIFICATION && !user.emailVerifiedAt) {
       await this.lockout.reset(email);
       throw new HttpException(
-        { message: "Email address not verified. Check your inbox.", details: { code: "EMAIL_NOT_VERIFIED" } },
+        {
+          message: "Email address not verified. Check your inbox.",
+          details: { code: "EMAIL_NOT_VERIFIED" },
+        },
         403,
       );
     }
@@ -201,7 +201,10 @@ export class AuthController {
           userId: user.id,
           action: "LOGIN_FAILED",
           entity: "Session",
-          details: { account: pseudonym(this.env.JWT_SECRET, email), reason: "invalid_second_factor" },
+          details: {
+            account: pseudonym(this.env.JWT_SECRET, email),
+            reason: "invalid_second_factor",
+          },
         });
         throw new HttpException(
           { message: "Invalid two-factor code.", details: { code: "MFA_INVALID" } },
@@ -263,7 +266,9 @@ export class AuthController {
   })
   @ApiOkResponse({ description: "Tokens renovados" })
   @ApiBadRequestResponse({ description: "Error de validación" })
-  @ApiUnauthorizedResponse({ description: "Refresh token inválido, expirado, revocado o reutilizado" })
+  @ApiUnauthorizedResponse({
+    description: "Refresh token inválido, expirado, revocado o reutilizado",
+  })
   @ApiForbiddenResponse({ description: "Cuenta suspendida o eliminada" })
   @ApiConflictResponse({ description: "El token ya fue rotado por una petición concurrente" })
   @ApiTooManyRequestsResponse({ description: "Rate limit excedido" })
@@ -316,7 +321,8 @@ export class AuthController {
   @HttpCode(200)
   @ApiOperation({
     summary: "Cierre de sesión (Logout)",
-    description: "Revoca la sesión asociada al Bearer token y/o al refresh token enviado (ambos opcionales).",
+    description:
+      "Revoca la sesión asociada al Bearer token y/o al refresh token enviado (ambos opcionales).",
   })
   @ApiOkResponse({ description: "Sesión revocada" })
   @ApiBadRequestResponse({ description: "Error de validación" })

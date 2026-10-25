@@ -8,8 +8,8 @@ import { HealthDto } from "./health.dto";
 
 /**
  * Deep healthcheck verifying process uptime and SQLite latency, documented in the
- * OpenAPI spec with the same shape as the reference (tags: System, 200/503). The 503
- * body is a custom shape (no standard error envelope), exactly like the reference.
+ * OpenAPI spec with the same shape as the Hono starter (tags: System, 200/503). The 503
+ * body is a custom shape (no standard error envelope), exactly like the Hono starter.
  */
 @ApiTags("System")
 @Controller()

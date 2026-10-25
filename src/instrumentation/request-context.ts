@@ -6,7 +6,7 @@ import type { NextFunction, Request, Response } from "express";
  * Per-request context (request id + start time) shared by the envelope interceptor
  * and the exception filter. The middleware that populates it runs FIRST — before
  * body parsing, guards and rate limiting — so every response (even 401/429/413)
- * carries X-Request-Id, X-Response-Time and Server-Timing, mirroring the reference
+ * carries X-Request-Id, X-Response-Time and Server-Timing, mirroring the Hono starter
  * implementation's requestId middleware ordering.
  */
 export interface RequestContext {
@@ -27,7 +27,7 @@ export function getRequestContext(): RequestContext | undefined {
   return requestContext.getStore();
 }
 
-/** Elapsed ms since request start with 2 decimals (reference: `1.44`, `18.27`). */
+/** Elapsed ms since request start with 2 decimals (Hono starter: `1.44`, `18.27`). */
 export function elapsedMs(ctx: RequestContext): number {
   return Math.round(Number(process.hrtime.bigint() - ctx.startedAtNs) / 1e4) / 100;
 }

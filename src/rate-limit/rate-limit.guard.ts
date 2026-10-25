@@ -15,7 +15,7 @@ interface LocalBucket {
 }
 
 /**
- * Global, metadata-driven rate limiter (the reference mounts `rateLimiter(name, windowMs, max)`
+ * Global, metadata-driven rate limiter (the Hono starter mounts `rateLimiter(name, windowMs, max)`
  * middleware on the same routes). Counters live in the database, so limits are shared by every
  * instance.
  *
@@ -69,10 +69,7 @@ export class RateLimitGuard implements CanActivate {
     }
 
     response.setHeader("X-RateLimit-Limit", maxRequests.toString());
-    response.setHeader(
-      "X-RateLimit-Remaining",
-      Math.max(0, maxRequests - bucket.count).toString(),
-    );
+    response.setHeader("X-RateLimit-Remaining", Math.max(0, maxRequests - bucket.count).toString());
 
     if (bucket.count > maxRequests) {
       const retryAfterSec = Math.max(1, Math.ceil((bucket.resetAt.getTime() - Date.now()) / 1000));
@@ -109,10 +106,7 @@ export class RateLimitGuard implements CanActivate {
     );
     const local = this.localHit(`rl:${name}:${ip}`, windowMs);
     response.setHeader("X-RateLimit-Limit", maxRequests.toString());
-    response.setHeader(
-      "X-RateLimit-Remaining",
-      Math.max(0, maxRequests - local.count).toString(),
-    );
+    response.setHeader("X-RateLimit-Remaining", Math.max(0, maxRequests - local.count).toString());
     if (local.count > maxRequests) {
       this.metrics.localBlocked += 1;
       const retryAfterSec = Math.max(1, Math.ceil((local.resetAt - Date.now()) / 1000));

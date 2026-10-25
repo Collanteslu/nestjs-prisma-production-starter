@@ -12,7 +12,7 @@ import {
 
 /**
  * DTOs validated by the global ContractValidationPipe. Class names ARE the OpenAPI component
- * names, so they match the reference's `.openapi("Name")` registrations one-to-one.
+ * names, so they match the Hono starter's `.openapi("Name")` registrations one-to-one.
  */
 export class LoginRequest extends createZodDto(loginSchema) {}
 export class RegisterRequest extends createZodDto(registerSchema) {}

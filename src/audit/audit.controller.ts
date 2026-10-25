@@ -18,7 +18,10 @@ import { AuditQuery } from "./dto/audit.dtos";
 @Controller("api/audit-logs")
 @UseGuards(AdminGuard)
 export class AuditController {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AuditService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /**
    * GET /api/audit-logs
