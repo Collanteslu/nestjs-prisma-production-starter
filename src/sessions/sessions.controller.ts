@@ -1,5 +1,5 @@
 import { Controller, Delete, Get, HttpCode, NotFoundException, Param, Post, Req } from "@nestjs/common";
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from "@nestjs/swagger";
 import type { Request } from "express";
 import { AuditService } from "../audit/audit.service";
 import type { AuthUserPayload } from "../auth/auth.types";
@@ -38,6 +38,7 @@ export class SessionsController {
       "Devuelve todos los dispositivos con sesión registrada por el usuario autenticado, incluidas las sesiones ya revocadas o caducadas que la tarea de limpieza aún no ha purgado.",
   })
   @ApiOkResponse({ description: "Sesiones del usuario" })
+  @ApiUnauthorizedResponse({ description: "Token ausente o inválido" })
   async list(@AuthUser() currentUser: AuthUserPayload) {
     const sessions = await this.prisma.session.findMany({
       where: { userId: currentUser.userId },
@@ -62,6 +63,8 @@ export class SessionsController {
       "Termina una sesión. Los tokens asociados dejan de funcionar de inmediato. Solo el dueño o un Admin.",
   })
   @ApiOkResponse({ description: "Sesión revocada" })
+  @ApiUnauthorizedResponse({ description: "Token ausente o inválido" })
+  @ApiNotFoundResponse({ description: "Sesión inexistente o de otro usuario" })
   async revokeOne(
     @Param() params: SessionIdParam,
     @AuthUser() currentUser: AuthUserPayload,
@@ -103,6 +106,7 @@ export class SessionsController {
     description: "Invalida todas las sesiones activas del usuario en todos sus dispositivos.",
   })
   @ApiOkResponse({ description: "Sesiones revocadas" })
+  @ApiUnauthorizedResponse({ description: "Token ausente o inválido" })
   async revokeAll(@AuthUser() currentUser: AuthUserPayload, @Req() req: Request) {
     const revokedCount = await this.sessions.revokeUserSessions(currentUser.userId);
 

@@ -314,6 +314,7 @@ export class AuthController {
   @Post("logout")
   @Public()
   @HttpCode(200)
+  @RateLimit("logout")
   @ApiOperation({
     summary: "Cierre de sesión (Logout)",
     description: "Revoca la sesión asociada al Bearer token y/o al refresh token enviado (ambos opcionales).",

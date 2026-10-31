@@ -220,7 +220,7 @@ Deliberate choices inherited from the reference and kept, with their compensatio
 
 - **Delivery (item 10).** The request only persists an `EmailOutbox` intent in the same
   transaction as its audit entry; a worker (kicked immediately, polled every 30 s)
-  delivers with exponential backoff (5 attempts ≈ 15 min) and then parks the row as
+  delivers with exponential backoff (5 attempts ≈ 7.5 min) and then parks the row as
   `failed` with a `WARN`/`ERROR` log — the hooks for delivery alerting. Pending rows
   survive restarts; tokens are minted AT DELIVERY time, so raw tokens never sit in the
   database. `MAIL_TRANSPORT=none` and undeliverable accounts retire rows immediately.

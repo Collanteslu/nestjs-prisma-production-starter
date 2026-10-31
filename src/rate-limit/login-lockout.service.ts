@@ -50,7 +50,10 @@ export class LoginLockoutService {
     await this.store.slide(this.keyOf(account), this.lockoutMs);
     // Alert hook: fires exactly once, when the account crosses the threshold
     const bucket = await this.store.peek(this.keyOf(account));
-    if (bucket && bucket.count === this.maxFailures) {
+    // >= (not ===): concurrent failures can jump past the threshold without ever landing on
+    // it. The early lockout check in the login flow stops recordFailure calls once the account
+    // is engaged, so the alert still fires effectively once per engagement.
+    if (bucket && bucket.count >= this.maxFailures) {
       this.logger.warn(
         `Account lockout engaged after ${this.maxFailures} failed login attempts ` +
           `(account=${pseudonym(this.env.JWT_SECRET, account)}, until=${bucket.resetAt.toISOString()})`,

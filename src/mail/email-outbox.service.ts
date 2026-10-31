@@ -5,7 +5,7 @@ import { PrismaService } from "../database/prisma.service";
 import { AccountMailService } from "./account-mail.service";
 import type { AuthTokenType } from "./auth-tokens.service";
 
-/** Backoff between delivery attempts (5 attempts span ≈ 15 minutes) */
+/** Backoff after each failed attempt (30/60/120/240 s; attempt 5 is terminal, ≈ 7.5 min total) */
 const RETRY_BACKOFF_MS = [30_000, 60_000, 120_000, 240_000, 480_000];
 const MAX_ATTEMPTS = RETRY_BACKOFF_MS.length;
 /** A row stuck in `sending` this long means the worker died mid-delivery: claim it again */
