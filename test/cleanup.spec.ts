@@ -16,7 +16,8 @@ import { CleanupService } from "../src/jobs/cleanup.service";
  * cannot make these tests lie.
  */
 const DAY = 24 * 60 * 60 * 1000;
-const PREFIX = "cleanup-spec-";
+// Unique per process and per run: the shared tmp database never hands a rerun another run's rows
+const PREFIX = `cleanup-spec-${process.pid}-${Date.now()}-`;
 const ago = (days: number) => new Date(Date.now() - days * DAY);
 const ahead = (days: number) => new Date(Date.now() + days * DAY);
 
@@ -54,6 +55,7 @@ describe("CleanupService: purge predicates (data lifecycle)", () => {
   }, 60_000);
 
   afterAll(async () => {
+    await clearSpecResidue();
     await app.close();
   });
 
@@ -152,10 +154,34 @@ describe("CleanupService: purge predicates (data lifecycle)", () => {
     // Outbox: only TERMINAL rows (sent/failed) older than 30 days
     await prisma.emailOutbox.createMany({
       data: [
-        { id: `${PREFIX}ox-sent-old`, ...user, type: "password_reset", status: "sent", createdAt: ago(40) },
-        { id: `${PREFIX}ox-failed-old`, ...user, type: "email_verify", status: "failed", createdAt: ago(40) },
-        { id: `${PREFIX}ox-sent-recent`, ...user, type: "password_reset", status: "sent", createdAt: ago(1) },
-        { id: `${PREFIX}ox-pending-old`, ...user, type: "email_verify", status: "pending", createdAt: ago(40) },
+        {
+          id: `${PREFIX}ox-sent-old`,
+          ...user,
+          type: "password_reset",
+          status: "sent",
+          createdAt: ago(40),
+        },
+        {
+          id: `${PREFIX}ox-failed-old`,
+          ...user,
+          type: "email_verify",
+          status: "failed",
+          createdAt: ago(40),
+        },
+        {
+          id: `${PREFIX}ox-sent-recent`,
+          ...user,
+          type: "password_reset",
+          status: "sent",
+          createdAt: ago(1),
+        },
+        {
+          id: `${PREFIX}ox-pending-old`,
+          ...user,
+          type: "email_verify",
+          status: "pending",
+          createdAt: ago(40),
+        },
       ],
     });
 
@@ -177,9 +203,7 @@ describe("CleanupService: purge predicates (data lifecycle)", () => {
     expect(await session("s-active")).toBe(true);
 
     const token = async (hash: string) =>
-      Boolean(
-        await prisma.refreshToken.findUnique({ where: { tokenHash: `${PREFIX}${hash}` } }),
-      );
+      Boolean(await prisma.refreshToken.findUnique({ where: { tokenHash: `${PREFIX}${hash}` } }));
     expect(await token("rt-expired")).toBe(false);
     expect(await token("rt-used-old")).toBe(false);
     expect(await token("rt-used-recent")).toBe(true);
@@ -235,9 +259,9 @@ describe("CleanupService: purge predicates (data lifecycle)", () => {
       data: { id: `${PREFIX}al-zero`, action: "CREATE", entity: "Task", createdAt: ago(400) },
     });
     await new CleanupService(prisma, rateLimit, { ...env, AUDIT_RETENTION_DAYS: 0 }).runOnce();
-    expect(
-      Boolean(await prisma.auditLog.findUnique({ where: { id: `${PREFIX}al-zero` } })),
-    ).toBe(true);
+    expect(Boolean(await prisma.auditLog.findUnique({ where: { id: `${PREFIX}al-zero` } }))).toBe(
+      true,
+    );
   });
 
   it("start() schedules cycles and stop() clears the timer without keeping the loop alive", async () => {
