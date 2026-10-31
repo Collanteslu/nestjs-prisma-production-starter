@@ -44,6 +44,12 @@ module.exports = {
       functions: 72,
       lines: 88,
     },
+    "./src/jobs/cleanup.service.ts": {
+      statements: 90,
+      branches: 70,
+      functions: 75,
+      lines: 95,
+    },
     "./src/audit/audit.service.ts": { statements: 64, branches: 64, functions: 72, lines: 64 },
   },
   // Los e2e comparten SQLite + rate limits: ejecutarlos en serie (Fase C+).
