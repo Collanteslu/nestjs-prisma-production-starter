@@ -92,11 +92,11 @@ mode-dependent route.
 
 ## Authentication modes (`AUTH_MODE`)
 
-| Mode | Mounted | Not mounted (404, absent from `/openapi.json` and `GET /`) |
-|---|---|---|
-| `full` (default) | everything: auth, recovery/verification, MFA, sessions, users, tasks, audit | — |
-| `basic` | `/api/auth` register/login/refresh/logout, `/api/sessions`, `/api/users`, `/api/tasks`, `/api/audit-logs` | recovery, email verification, `/api/auth/mfa/*`, `DELETE /api/users/:id/mfa` |
-| `none` | `/api/tasks` (public, ownerless) and the system routes | every auth, user, session, recovery, MFA and audit route |
+| Mode             | Mounted                                                                                                   | Not mounted (404, absent from `/openapi.json` and `GET /`)                   |
+| ---------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `full` (default) | everything: auth, recovery/verification, MFA, sessions, users, tasks, audit                               | —                                                                            |
+| `basic`          | `/api/auth` register/login/refresh/logout, `/api/sessions`, `/api/users`, `/api/tasks`, `/api/audit-logs` | recovery, email verification, `/api/auth/mfa/*`, `DELETE /api/users/:id/mfa` |
+| `none`           | `/api/tasks` (public, ownerless) and the system routes                                                    | every auth, user, session, recovery, MFA and audit route                     |
 
 How it is wired, so new code follows the same pattern:
 
@@ -105,11 +105,11 @@ How it is wired, so new code follows the same pattern:
   around the code.
 - `AppModule.forRoot(env)` builds the `DynamicModule` and imports every resource module
   conditionally (`...(features.auth ? [SessionsModule, AuthModule, UsersModule,
-  AuditLogsModule] : [])`). A disabled module adds no route and nothing to the spec.
+AuditLogsModule] : [])`). A disabled module adds no route and nothing to the spec.
   Controllers stay registered unconditionally only when the reference does the same
   (`TasksModule`, `HealthController`, `SystemController`).
 - `MfaModule` (TOTP/recovery-code services) is `@Global` and always imported: login checks
-  the second factor in every mode. The MFA *routes* (`MfaRoutesModule`) exist only with
+  the second factor in every mode. The MFA _routes_ (`MfaRoutesModule`) exist only with
   `features.accountSecurity`.
 - `AuthPrefixMiddleware` (`src/common/middleware/`) authenticates the four protected
   prefixes and all their sub-paths, mirroring the reference's `app.use(prefix)` +
@@ -191,7 +191,7 @@ Deliberate choices inherited from the reference and kept, with their compensatio
   `WARN` line with a pseudonymous account reference for alerting, and the raw addresses
   never appear in logs. Recovery options for a locked user: wait out the window, or an
   operator computes the bucket key with `node --env-file=.env scripts/lockout-key.mjs
-  <email>` (the tool is pinned to `pii.ts` by test) and clears that `RateLimitBucket`
+<email>` (the tool is pinned to `pii.ts` by test) and clears that `RateLimitBucket`
   row.
   Progressive backoffs were evaluated and rejected for now: they would diverge from the
   reference's contract and complicate the deterministic tests for marginal gain at a
@@ -367,8 +367,8 @@ dependency graph; the CLI only speaks HTTP to localhost. CI runs the battery in 
      remove `MFA_ENCRYPTION_KEY_PREVIOUS`. NEVER rotate `JWT_SECRET` as a substitute:
      when no dedicated key is set, TOTP secrets derive from it and rotating it makes
      every authenticator undecryptable.
-  The rehearsal proves all three properties end-to-end: enroll under K1 → TOTP login
-  with K1-as-previous → TOTP login with ONLY K2 (i.e. the lazy re-encryption happened).
+     The rehearsal proves all three properties end-to-end: enroll under K1 → TOTP login
+     with K1-as-previous → TOTP login with ONLY K2 (i.e. the lazy re-encryption happened).
 - **Revoke sessions**: users do it themselves (`DELETE /api/sessions/:id`,
   `POST /api/sessions/revoke-all`); admins use `POST /api/users/:id/revoke-sessions`;
   password reset and admin MFA reset revoke the target account's sessions inside the
@@ -400,7 +400,7 @@ dependency graph; the CLI only speaks HTTP to localhost. CI runs the battery in 
      backup is not a backup.
 - **Deployment secrets**: source of truth is the platform's secret store — host `.env`
   (mode 0600, gitignored; `.env.example` documents keys with values blank), Docker
-  `--env-file`/secrets or an orchestrator's secret store (compose reads JWT_*/MFA_* from
+  `--env-file`/secrets or an orchestrator's secret store (compose reads JWT__/MFA__ from
   the environment and refuses to start without them), CI values as **repository
   secrets** (the contract's JWT values in `.github/workflows/ci.yml` are throwaway test
   fixtures, never production secrets), cloud secret manager for Turso tokens. Secrets
@@ -409,15 +409,15 @@ dependency graph; the CLI only speaks HTTP to localhost. CI runs the battery in 
   (level shown), matched with log-based alerting — no metrics endpoint is exposed on
   purpose, so the HTTP surface stays contract-identical:
 
-  | Pattern | Level | Condition | Severity | Response |
-  |---|---|---|---|---|
-  | `Rate limit store unavailable` | ERROR | 1× | page | DB incident. With `RATE_LIMIT_ON_DB_FAILURE=local` the credential routes stay covered per-process and the rest fails open; check the DB, then `RateLimitGuard.metrics` (`storeFailures`, `localAllowed`, `localBlocked`, `openAllowed`) |
-  | `Account lockout engaged` | WARN | ≥5 distinct accounts / 10 min | warning | Credential stuffing or lockout abuse; correlate with per-IP 429s. Affected users self-heal within `LOGIN_LOCKOUT_MINUTES`; support locates/clears the row with `node --env-file=.env scripts/lockout-key.mjs <email>` |
-  | `Email delivery failed (attempt` | WARN | ≥3 / 10 min | warning | SMTP degrading; watch for abandonments |
-  | `Email delivery abandoned` | ERROR | 1× | page | A user will never receive the message: inspect `EmailOutbox` (`status=failed`, `lastError`), fix the transport; the user re-requests the link |
-  | `Email retired without delivery` | WARN | ≥5 / 10 min | warning | `MAIL_TRANSPORT=none` or undeliverable accounts — a misconfiguration if unintended |
-  | `Failed to persist audit log entry` | ERROR | 1× | page (compliance) | Audit gap: check DB writability; entries are lost until it recovers |
-  | `Email outbox drain failed` | ERROR | 1× | page | The delivery worker is broken — pending emails stall |
+  | Pattern                             | Level | Condition                     | Severity          | Response                                                                                                                                                                                                                                |
+  | ----------------------------------- | ----- | ----------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `Rate limit store unavailable`      | ERROR | 1×                            | page              | DB incident. With `RATE_LIMIT_ON_DB_FAILURE=local` the credential routes stay covered per-process and the rest fails open; check the DB, then `RateLimitGuard.metrics` (`storeFailures`, `localAllowed`, `localBlocked`, `openAllowed`) |
+  | `Account lockout engaged`           | WARN  | ≥5 distinct accounts / 10 min | warning           | Credential stuffing or lockout abuse; correlate with per-IP 429s. Affected users self-heal within `LOGIN_LOCKOUT_MINUTES`; support locates/clears the row with `node --env-file=.env scripts/lockout-key.mjs <email>`                   |
+  | `Email delivery failed (attempt`    | WARN  | ≥3 / 10 min                   | warning           | SMTP degrading; watch for abandonments                                                                                                                                                                                                  |
+  | `Email delivery abandoned`          | ERROR | 1×                            | page              | A user will never receive the message: inspect `EmailOutbox` (`status=failed`, `lastError`), fix the transport; the user re-requests the link                                                                                           |
+  | `Email retired without delivery`    | WARN  | ≥5 / 10 min                   | warning           | `MAIL_TRANSPORT=none` or undeliverable accounts — a misconfiguration if unintended                                                                                                                                                      |
+  | `Failed to persist audit log entry` | ERROR | 1×                            | page (compliance) | Audit gap: check DB writability; entries are lost until it recovers                                                                                                                                                                     |
+  | `Email outbox drain failed`         | ERROR | 1×                            | page              | The delivery worker is broken — pending emails stall                                                                                                                                                                                    |
 
   In-process counters exist for probes and tests and are deliberately not HTTP-exposed
   (contract parity): `RateLimitGuard.metrics` and `EmailOutboxService.metrics`
@@ -444,7 +444,7 @@ environment, result) with the rollout.
    mode 0600, orchestrator secrets, cloud KMS). Verify: the app boots in production
    mode, `git grep <valor>` finds nothing, and a secret scan of the delivered image
    (`trivy image --scanners secret`) is clean.
-2. **Proxy**: deploy the reference configuration (step 6 under *Proxy deployments*)
+2. **Proxy**: deploy the reference configuration (step 6 under _Proxy deployments_)
    with the real proxy, set `TRUST_PROXY`/`TRUST_PROXY_HOPS` to the real hop count, run
    the forged-`X-Forwarded-For` verification **from outside** and confirm exactly one
    HSTS issuer for the domain.
@@ -458,7 +458,7 @@ environment, result) with the rollout.
    `scripts/ops-rehearsal.sh backup-restore` (`migrate diff`, login of a pre-backup
    user, contract `system` group). For Turso, execute the point-in-time-restore drill
    once.
-5. **Alerts on a real provider**: the table under *Operation and security runbooks* is
+5. **Alerts on a real provider**: the table under _Operation and security runbooks_ is
    the source of truth (patterns, thresholds, severities) — provision those rules in
    your log pipeline. Example for Grafana/Loki:
    `sum(count_over_time({app="nestjs-api"} |= "Email delivery abandoned" [5m])) > 0` →
@@ -472,19 +472,19 @@ environment, result) with the rollout.
 
 ## Useful files
 
-| Path | What |
-|---|---|
-| `src/config/env.ts` | Env schema, cross-field validation, `featuresOf` |
-| `src/database/migrations-guard.ts` | Startup guard: DB migration history vs `prisma/migrations` |
-| `src/main.ts` | Boot order: config → connect → pragmas → guard → seed → cleanup → shutdown hooks → listen |
-| `src/app.module.ts` | Conditional module mounting by features; global guards, pipes, interceptors |
-| `src/configure-app.ts` | Helmet, CORS, body parsers, middleware, Swagger + Scalar |
-| `src/common/` | Decorators (`@Public`, `@RateLimit`, `@TopLevelEnvelope`), pipes, interceptors, filters, middleware |
-| `src/common/utils/password.ts` | Argon2id hashing + legacy bcrypt verify and progressive rehash |
-| `src/common/utils/pii.ts` | `pseudonym()` — HMAC pseudonyms for keys and security logs |
-| `src/mail/email-outbox.service.ts` | Durable delivery worker (backoff, retries, metrics) |
-| `src/<recurso>/` | One module per resource (controller + service + `dto/`) |
-| `src/jobs/cleanup.service.ts` | Periodic purge of expired sessions, tokens, buckets and old audit rows |
-| `test/app.spec.ts` | Jest integration suite: HTTP infrastructure over the real surface |
-| `contract/` | Executable parity spec (scenarios per group, one per `AUTH_MODE`) |
-| `bruno/` | Bruno collection (runtime tokens never committed) |
+| Path                               | What                                                                                                |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `src/config/env.ts`                | Env schema, cross-field validation, `featuresOf`                                                    |
+| `src/database/migrations-guard.ts` | Startup guard: DB migration history vs `prisma/migrations`                                          |
+| `src/main.ts`                      | Boot order: config → connect → pragmas → guard → seed → cleanup → shutdown hooks → listen           |
+| `src/app.module.ts`                | Conditional module mounting by features; global guards, pipes, interceptors                         |
+| `src/configure-app.ts`             | Helmet, CORS, body parsers, middleware, Swagger + Scalar                                            |
+| `src/common/`                      | Decorators (`@Public`, `@RateLimit`, `@TopLevelEnvelope`), pipes, interceptors, filters, middleware |
+| `src/common/utils/password.ts`     | Argon2id hashing + legacy bcrypt verify and progressive rehash                                      |
+| `src/common/utils/pii.ts`          | `pseudonym()` — HMAC pseudonyms for keys and security logs                                          |
+| `src/mail/email-outbox.service.ts` | Durable delivery worker (backoff, retries, metrics)                                                 |
+| `src/<recurso>/`                   | One module per resource (controller + service + `dto/`)                                             |
+| `src/jobs/cleanup.service.ts`      | Periodic purge of expired sessions, tokens, buckets and old audit rows                              |
+| `test/app.spec.ts`                 | Jest integration suite: HTTP infrastructure over the real surface                                   |
+| `contract/`                        | Executable parity spec (scenarios per group, one per `AUTH_MODE`)                                   |
+| `bruno/`                           | Bruno collection (runtime tokens never committed)                                                   |

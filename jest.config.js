@@ -21,7 +21,12 @@ module.exports = {
   // (directory globs would also hit files covered by contract/ rather than Jest).
   coverageThreshold: {
     global: { statements: 60, branches: 46, functions: 54, lines: 60 },
-    "./src/rate-limit/rate-limit.guard.ts": { statements: 92, branches: 76, functions: 98, lines: 94 },
+    "./src/rate-limit/rate-limit.guard.ts": {
+      statements: 92,
+      branches: 76,
+      functions: 98,
+      lines: 94,
+    },
     "./src/rate-limit/login-lockout.service.ts": {
       statements: 97,
       branches: 88,

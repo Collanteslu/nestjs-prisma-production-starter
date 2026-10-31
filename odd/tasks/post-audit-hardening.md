@@ -27,14 +27,14 @@ document was written.
 
 ## Tasks
 
-| ID | Spec | Route | Commit |
-|----|------|-------|--------|
-| T1 | S1 + S6(pino) | inline | 902c5ef |
-| T2 | S2 | inline | f8f7284 |
-| T3 | S4 | inline | 0a4b379 |
-| T4 | S5 | inline, test-first | b7ccdc5 |
-| T5 | S3 | inline | bdb9ec8 |
-| T6 | S6 | inline, contract-checked | e92fc36 |
+| ID  | Spec          | Route                    | Commit  |
+| --- | ------------- | ------------------------ | ------- |
+| T1  | S1 + S6(pino) | inline                   | 902c5ef |
+| T2  | S2            | inline                   | f8f7284 |
+| T3  | S4            | inline                   | 0a4b379 |
+| T4  | S5            | inline, test-first       | b7ccdc5 |
+| T5  | S3            | inline                   | bdb9ec8 |
+| T6  | S6            | inline, contract-checked | e92fc36 |
 
 ## Log
 
