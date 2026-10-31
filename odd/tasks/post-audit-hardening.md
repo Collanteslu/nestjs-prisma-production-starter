@@ -48,3 +48,17 @@ document was written.
   shows the 3 keys; T4 RED→GREEN (65/65); T5 new cleanup suite 4/4 + floor (69/69 total);
   T6 Jest+lint+typecheck+build green and contract harness full-mode mounting/auth/sessions/
   tasks/users/system all OK against a scratch migrated DB.
+- L4: review follow-ups (the non-blocking WARNING of the first native review, approved on
+  lineage review-d1f5796d8edd0d43, target sha256:5d57adf1…) worked as separate commits:
+  3f8c1af (lockout alert fires once, from the hit's own count), e5d2838 (LOGOUT_RATE_LIMIT_MAX
+  and TRUST_PROXY edge cases), d15caf1 (cleanup suite isolated per run, sortBy vocabularies),
+  f713742 (prettier-only formatting, verified against prettier(HEAD)), 1197bd9 (lockout window
+  slid inside the same atomic hit). Each reviewed candidate was approved and acknowledged
+  (lineages review-d1f5796d8edd0d43 and review-70bab3e8592895a5).
+- L5: closure. Final gates on HEAD: typecheck, lint, build, Jest 76/76 (13 suites), contract
+  full-mode (mounting, auth, sessions, tasks, users, ratelimit, system) 0 failures and no 5xx.
+- Open item: `.env.example` lacks `# LOGOUT_RATE_LIMIT_MAX=30`. The edit was blocked by the
+  security policy on sensitive paths; add the line by hand. It does not affect tests or runtime.
+- Residual, accepted: advisory WARNINGs on `login-lockout.service.ts` recur across reviews
+  (design observations on the atomic hit path, non-blocking per the verdict). Further
+  refactoring would only produce another review round; not pursued.
