@@ -36,6 +36,8 @@ services:
       - TRUST_PROXY=${TRUST_PROXY:-false}
       - TRUST_PROXY_HOPS=${TRUST_PROXY_HOPS:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-}
+      # Opt-in explícito para CORS_ORIGINS="*" en producción (lo exige env.ts)
+      - CORS_ALLOW_WILDCARD=${CORS_ALLOW_WILDCARD:-}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       # Opcionales: vacío = valor por defecto de la aplicación
@@ -54,6 +56,9 @@ services:
       - MFA_ENCRYPTION_KEY=${MFA_ENCRYPTION_KEY:-}
       # ^ Obligatoria en producción con AUTH_MODE=full: la app no arranca sin ella
       #   (genera una con: openssl rand -base64 48; rotación en AGENTS.md)
+      # Clave PREVIA durante una rotación (runbook de AGENTS.md): solo sirve para
+      # descifrar; quítala cuando todos los usuarios enrolados hayan entrado una vez.
+      - MFA_ENCRYPTION_KEY_PREVIOUS=${MFA_ENCRYPTION_KEY_PREVIOUS:-}
       - MFA_ISSUER=${MFA_ISSUER:-}
       - RECOVERY_RATE_LIMIT_MAX=${RECOVERY_RATE_LIMIT_MAX:-}
       - MFA_RATE_LIMIT_MAX=${MFA_RATE_LIMIT_MAX:-}
@@ -61,6 +66,9 @@ services:
       - LOGIN_LOCKOUT_MINUTES=${LOGIN_LOCKOUT_MINUTES:-}
       - AUDIT_RETENTION_DAYS=${AUDIT_RETENTION_DAYS:-}
       - REFRESH_REUSE_GRACE_SECONDS=${REFRESH_REUSE_GRACE_SECONDS:-}
+      # Comportamiento del limitador si el store cae: local (default) protege las rutas
+      # críticas por proceso; open deja pasar todo (pura disponibilidad)
+      - RATE_LIMIT_ON_DB_FAILURE=${RATE_LIMIT_ON_DB_FAILURE:-}
       # Turso/libSQL remoto (si se define, sustituye al SQLite local)
       - TURSO_DATABASE_URL=${TURSO_DATABASE_URL:-}
       - TURSO_AUTH_TOKEN=${TURSO_AUTH_TOKEN:-}
