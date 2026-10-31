@@ -45,12 +45,10 @@ export class LoginLockoutService {
   }
 
   async recordFailure(account: string): Promise<void> {
-    const key = this.keyOf(account);
-    // The count returned by this very hit is unique to it (atomic increment), so exactly one
-    // failure can land on the threshold: the alert fires once per engagement, race-free.
-    const hit = await this.store.hit(key, this.lockoutMs);
-    // The lockout is measured from the last failure, not from the first one
-    await this.store.slide(key, this.lockoutMs);
+    // One atomic store statement: the count and the sliding window (measured from the last
+    // failure) change together. The count is this failure's own, so it equals maxFailures for
+    // exactly one failure: the alert fires once per engagement.
+    const hit = await this.store.hit(this.keyOf(account), this.lockoutMs, { slide: true });
     if (hit.count === this.maxFailures) {
       const until = new Date(Date.now() + this.lockoutMs);
       this.logger.warn(

@@ -52,6 +52,14 @@ describe("LoginLockoutService alert hook", () => {
     }
   });
 
+  it("one failure is one atomic store call: the window slides inside the hit", async () => {
+    const store = buildStore();
+    const lockout = new LoginLockoutService(store, env);
+    await lockout.recordFailure("slide@example.com");
+    expect(store.hit).toHaveBeenCalledWith(expect.any(String), 15 * 60_000, { slide: true });
+    expect(store.slide).not.toHaveBeenCalled();
+  });
+
   it("does not warn below the threshold", async () => {
     const warn = jest.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
     try {

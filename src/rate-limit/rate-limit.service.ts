@@ -20,14 +20,18 @@ export class RateLimitService {
    * Counts one hit against `key`, opening a new window of `windowMs` when none is active.
    * @returns The bucket after the hit
    */
-  async hit(key: string, windowMs: number): Promise<Bucket> {
+  async hit(key: string, windowMs: number, options: { slide?: boolean } = {}): Promise<Bucket> {
     for (let attempt = 0; attempt < 3; attempt++) {
       const now = new Date();
 
-      // Atomic increment of a live window
+      // Atomic increment of a live window; with `slide` the same statement pushes its end
+      // forward, so the count and the window it belongs to never disagree
       const updated = await this.prisma.rateLimitBucket.updateMany({
         where: { key, resetAt: { gt: now } },
-        data: { count: { increment: 1 } },
+        data: {
+          count: { increment: 1 },
+          ...(options.slide && { resetAt: new Date(now.getTime() + windowMs) }),
+        },
       });
 
       if (updated.count === 0) {
