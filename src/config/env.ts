@@ -32,7 +32,9 @@ export const envSchema = z
     TURSO_DATABASE_URL: z.string().optional(),
     TURSO_AUTH_TOKEN: z.string().optional(),
     TRUST_PROXY: z
-      .string()
+      .enum(["true", "false", "1", "0"], {
+        error: "TRUST_PROXY must be one of: true, false, 1, 0",
+      })
       .optional()
       .transform((val) => val === "true" || val === "1"),
     // Number of trusted reverse proxies in front of the API (1 = one proxy such as Traefik/Nginx;
