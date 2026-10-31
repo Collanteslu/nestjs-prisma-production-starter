@@ -58,6 +58,8 @@ export const envSchema = z
       .transform((val) => val === "true" || val === "1"),
     LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
     REFRESH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
+    // Own budget for POST /api/auth/logout (per IP, per minute): it no longer borrows refresh's
+    LOGOUT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
     REGISTER_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
     // Per-IP limits for the recovery endpoints (per hour) and the MFA endpoints (per minute)
     RECOVERY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),

@@ -89,7 +89,7 @@ describe("env guards (fail-fast configuration)", () => {
       expect(env.CORS_ALLOW_WILDCARD).toBe(true);
     });
 
-    it('accepts an explicit origin list without the opt-in', () => {
+    it("accepts an explicit origin list without the opt-in", () => {
       const env = parseEnv({
         ...production,
         MFA_ENCRYPTION_KEY: "k".repeat(40),
@@ -165,6 +165,25 @@ describe("env guards (fail-fast configuration)", () => {
       expect(parseEnv({ ...dev, TRUST_PROXY: "1" }).TRUST_PROXY).toBe(true);
       expect(parseEnv({ ...dev, TRUST_PROXY: "false" }).TRUST_PROXY).toBe(false);
       expect(parseEnv({ ...dev, TRUST_PROXY: "0" }).TRUST_PROXY).toBe(false);
+    });
+  });
+
+  describe("rate-limit and proxy defaults (review follow-ups)", () => {
+    const dev = {
+      NODE_ENV: "development",
+      JWT_SECRET: "dev-secret-0123456789",
+      JWT_REFRESH_SECRET: "dev-refresh-abcdef0123",
+    };
+
+    it("logout has its own budget: 30/min by default, independent of refresh", () => {
+      expect(parseEnv(dev).LOGOUT_RATE_LIMIT_MAX).toBe(30);
+      expect(parseEnv({ ...dev, LOGOUT_RATE_LIMIT_MAX: "5" }).LOGOUT_RATE_LIMIT_MAX).toBe(5);
+      expect(parseEnv({ ...dev, REFRESH_RATE_LIMIT_MAX: "99" }).LOGOUT_RATE_LIMIT_MAX).toBe(30);
+    });
+
+    it("an unset TRUST_PROXY is off, and padded values are rejected rather than coerced", () => {
+      expect(parseEnv(dev).TRUST_PROXY).toBe(false);
+      expectRejected({ ...dev, TRUST_PROXY: " true" }, "TRUST_PROXY", /must be one of/);
     });
   });
 
