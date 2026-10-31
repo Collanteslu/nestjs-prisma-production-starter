@@ -5,7 +5,7 @@ import { buildMeta } from "../instrumentation/request-context";
  * raw-Express body-parser error middleware (body parsing happens BEFORE the Nest
  * pipeline, so the filter never sees those errors).
  *
- * Parity with the reference API (verified against the frozen baseline), mirroring
+ * Parity with the Hono starter API (verified against the frozen baseline), mirroring
  * `errorSchema` in the original:
  *   { success: false, message, details?, errors?, retryAfterSeconds?, meta }
  * (no `statusCode` field — HTTP status is carried by the response itself).
@@ -20,7 +20,7 @@ export const REQUEST_FALLBACK_MESSAGE = "Request could not be processed.";
 export const BODY_LIMIT_BYTES = 100 * 1024;
 
 /**
- * Groups Zod issues by field path — exact reference format:
+ * Groups Zod issues by field path — exact Hono starter format:
  * `{ "email": ["Invalid email"], "profile.city": ["Required"], "_root": [...] }`
  */
 export function groupZodIssues(

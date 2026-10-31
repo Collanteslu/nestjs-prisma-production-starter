@@ -12,6 +12,11 @@ case "$DATABASE_URL" in
     ;;
 esac
 
+# Validar la configuración ANTES de tocar la base de datos: con un entorno inválido (p. ej.
+# falta JWT_SECRET) la app abortaría al arrancar, pero las migraciones ya se habrían aplicado
+# sobre la base de datos. Usa el mismo loadEnv() que la app (falla con salida 1 y detalle).
+node -e 'require("./dist/config/env.js").loadEnv()'
+
 # Aplicar migraciones versionadas (nunca "db push" en producción). Sin toolchain npm en
 # la imagen: la CLI de Prisma se ejecuta directamente con node.
 PRISMA="node node_modules/prisma/build/index.js"

@@ -6,7 +6,7 @@ import { SessionsService } from "./sessions.service";
 /**
  * Session lifecycle: token pair issuance, atomic refresh rotation with reuse detection,
  * revocation, and the `/api/sessions` routes. Imported by AppModule only when
- * `features.auth`, which makes the routes conditional exactly like the reference.
+ * `features.auth`, which makes the routes conditional exactly like the Hono starter.
  */
 @Module({
   controllers: [SessionsController],

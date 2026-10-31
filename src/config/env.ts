@@ -5,7 +5,7 @@ import { z } from "zod";
 /**
  * Environment configuration: strict schema + fail-fast loading.
  *
- * Ported 1:1 from the reference implementation (Hono). Unlike the reference, nothing
+ * Ported 1:1 from the Hono starter (Hono). Unlike the Hono starter, nothing
  * reads `process.env` at import time: `loadEnv()`/`parseEnv()` produce a validated
  * object that is injected into the app (AppModule.forRoot), which keeps tests free of
  * module-load side effects and allows explicit overrides.
@@ -304,6 +304,11 @@ export type Features = {
   accountSecurity: boolean;
 };
 
+/** Documentation is enabled by default outside production (override with ENABLE_DOCS). */
+export function docsEnabled(env: Env): boolean {
+  return env.ENABLE_DOCS ?? env.NODE_ENV !== "production";
+}
+
 export function featuresOf(env: Env): Features {
   return {
     auth: env.AUTH_MODE !== "none",
@@ -311,7 +316,7 @@ export function featuresOf(env: Env): Features {
   };
 }
 
-/** Raised by parseEnv(); carries the same flattened field errors the reference prints. */
+/** Raised by parseEnv(); carries the same flattened field errors the Hono starter prints. */
 export class EnvValidationError extends Error {
   constructor(readonly fieldErrors: Record<string, string[]>) {
     super("Invalid or missing environment configuration");
@@ -336,7 +341,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
 
 let dotenvLoaded = false;
 
-/** Loads `.env` and validates `process.env`, failing fast at startup like the reference. */
+/** Loads `.env` and validates `process.env`, failing fast at startup like the Hono starter. */
 export function loadEnv(): Env {
   if (!dotenvLoaded) {
     dotenv.config({ quiet: true });

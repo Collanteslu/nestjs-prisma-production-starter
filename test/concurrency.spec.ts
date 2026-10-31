@@ -86,9 +86,7 @@ describe("concurrency: rotation, revocation and rate limits", () => {
     const tokens = await login(creds);
 
     const [revokeRes, refreshRes] = await Promise.all([
-      http()
-        .post("/api/sessions/revoke-all")
-        .set("Authorization", `Bearer ${tokens.accessToken}`),
+      http().post("/api/sessions/revoke-all").set("Authorization", `Bearer ${tokens.accessToken}`),
       http().post("/api/auth/refresh").send({ refreshToken: tokens.refreshToken }),
     ]);
     // Whichever order they interleaved in, both are legitimate outcomes of the race…
@@ -102,10 +100,7 @@ describe("concurrency: rotation, revocation and rate limits", () => {
       .get("/api/sessions/me")
       .set("Authorization", `Bearer ${refreshedAccess}`)
       .expect(401);
-    await http()
-      .post("/api/auth/refresh")
-      .send({ refreshToken: tokens.refreshToken })
-      .expect(401); // its session is gone: reuse outside any grace resolves to revocation
+    await http().post("/api/auth/refresh").send({ refreshToken: tokens.refreshToken }).expect(401); // its session is gone: reuse outside any grace resolves to revocation
   });
 
   it("parallel requests count atomically: exactly `max` are admitted", async () => {

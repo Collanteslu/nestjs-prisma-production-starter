@@ -34,7 +34,7 @@ import { MfaDisableRequest, MfaEnableRequest, MfaSetupRequest } from "./dto/mfa.
 
 /**
  * Two-factor authentication (TOTP) management, mounted under /api/auth/mfa
- * (route parity with the reference's routes/mfa.ts, which exists only with AUTH_MODE=full).
+ * (route parity with the Hono starter's routes/mfa.ts, which exists only with AUTH_MODE=full).
  * Enrolling needs the password, so a stolen access token cannot attach an attacker's authenticator.
  */
 @ApiTags("MFA")

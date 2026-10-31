@@ -150,7 +150,8 @@ export class AuthController {
       omit: { password: false, totpSecret: false, totpLastStep: false },
     });
 
-    // Constant-time bcrypt comparison (always executed to prevent timing side-channel leaks)
+    // Constant-time password verification (always executed, against a dummy hash for unknown
+    // accounts, to prevent timing side-channel leaks)
     const isValidPassword = await comparePassword(
       password,
       user?.password ?? (await getDummyHash()),

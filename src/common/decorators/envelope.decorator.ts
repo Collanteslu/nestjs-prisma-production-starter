@@ -7,7 +7,7 @@ import { SetMetadata } from "@nestjs/common";
  *
  * - `@NoEnvelope()`      → body returned verbatim (health check, index, raw docs).
  * - `@TopLevelEnvelope()` → handler fields spread at the TOP level together with
- *   `success` + `meta` (login/refresh token responses in the reference API).
+ *   `success` + `meta` (login/refresh token responses in the Hono starter API).
  */
 export const NO_ENVELOPE_KEY = "contract:noEnvelope";
 export const TOP_LEVEL_ENVELOPE_KEY = "contract:topLevelEnvelope";

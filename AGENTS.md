@@ -69,13 +69,19 @@ nothing to attest yet; when a registry is configured (ghcr.io or similar), add
 `cosign verify`. Until then the integrity chain is: digest-pinned base, SHA-pinned
 actions, `npm audit`, Trivy gate and the SBOM artifact.
 Tests create and migrate their own temporary SQLite database (`test/setup-env.ts` +
-the `beforeAll` of `test/app.spec.ts`), so `dev.db` is never touched.
+the `beforeAll` of `test/app.spec.ts`), so `dev.db` is never touched. `setup-env.ts`
+forces `DATABASE_URL` to that temporary file and clears `TURSO_DATABASE_URL`,
+`TURSO_AUTH_TOKEN` and `SMTP_URL`, so variables exported in your shell can never make the
+suite write to a real database or send real mail (`test/test-isolation.spec.ts`).
+After changing the `Dockerfile` or `docker-entrypoint.sh`, run
+`docker build -t nestjs-api:ci . && scripts/docker-smoke.sh nestjs-api:ci`
+(read-only filesystem, migrations, admin login, `HEALTHCHECK`, non-root user).
 `npm run test:e2e` (`test-api.sh`) is an optional curl suite against a running dev
 server: it needs the demo accounts and `AUTH_MODE=full`.
 
 ## Contract parity
 
-`contract/` is the executable specification replicated from the reference project: HTTP
+`contract/` is the executable specification replicated from the Hono starter: HTTP
 scenarios grouped in `auth`, `sessions`, `tasks`, `users`, `audit`, `system`, `mounting`,
 `recovery` and `mfa`. Every phase of this repository was gated on it.
 
@@ -106,13 +112,13 @@ How it is wired, so new code follows the same pattern:
 - `AppModule.forRoot(env)` builds the `DynamicModule` and imports every resource module
   conditionally (`...(features.auth ? [SessionsModule, AuthModule, UsersModule,
 AuditLogsModule] : [])`). A disabled module adds no route and nothing to the spec.
-  Controllers stay registered unconditionally only when the reference does the same
+  Controllers stay registered unconditionally only when the Hono starter does the same
   (`TasksModule`, `HealthController`, `SystemController`).
 - `MfaModule` (TOTP/recovery-code services) is `@Global` and always imported: login checks
   the second factor in every mode. The MFA _routes_ (`MfaRoutesModule`) exist only with
   `features.accountSecurity`.
 - `AuthPrefixMiddleware` (`src/common/middleware/`) authenticates the four protected
-  prefixes and all their sub-paths, mirroring the reference's `app.use(prefix)` +
+  prefixes and all their sub-paths, mirroring the Hono starter's `app.use(prefix)` +
   `app.use(prefix + "/*")`: an unauthenticated probe of an unmounted sub-path answers 401,
   not 404. It is a no-op with `AUTH_MODE=none` and there are no `@Public()` routes under
   those prefixes.
@@ -180,7 +186,7 @@ Express can only distinguish the real client when the trust configuration matche
 
 ## Security decisions and trade-offs (audit log)
 
-Deliberate choices inherited from the reference and kept, with their compensations:
+Deliberate choices inherited from the Hono starter and kept, with their compensations:
 
 - **Account-based lockout (item 4).** `LOGIN_LOCKOUT_*` counts failures per ACCOUNT, so
   anyone who knows an email can keep it locked for up to `LOGIN_LOCKOUT_MINUTES` — a
@@ -194,7 +200,7 @@ Deliberate choices inherited from the reference and kept, with their compensatio
 <email>` (the tool is pinned to `pii.ts` by test) and clears that `RateLimitBucket`
   row.
   Progressive backoffs were evaluated and rejected for now: they would diverge from the
-  reference's contract and complicate the deterministic tests for marginal gain at a
+  Hono starter's contract and complicate the deterministic tests for marginal gain at a
   15-minute bound.
 - **Rate limiter under store failure (item 5).** With `RATE_LIMIT_ON_DB_FAILURE=local`
   (default) a database outage does NOT disable protection on the credential surface:
@@ -220,7 +226,7 @@ Deliberate choices inherited from the reference and kept, with their compensatio
 
 - **Delivery (item 10).** The request only persists an `EmailOutbox` intent in the same
   transaction as its audit entry; a worker (kicked immediately, polled every 30 s)
-  delivers with exponential backoff (5 attempts ≈ 7.5 min) and then parks the row as
+  delivers with exponential backoff (5 attempts over ≈ 7.5 min) and then parks the row as
   `failed` with a `WARN`/`ERROR` log — the hooks for delivery alerting. Pending rows
   survive restarts; tokens are minted AT DELIVERY time, so raw tokens never sit in the
   database. `MAIL_TRANSPORT=none` and undeliverable accounts retire rows immediately.
@@ -485,6 +491,8 @@ environment, result) with the rollout.
 | `src/mail/email-outbox.service.ts` | Durable delivery worker (backoff, retries, metrics)                                                 |
 | `src/<recurso>/`                   | One module per resource (controller + service + `dto/`)                                             |
 | `src/jobs/cleanup.service.ts`      | Periodic purge of expired sessions, tokens, buckets and old audit rows                              |
+| `src/logging.ts`                   | `LOG_LEVEL` mapping and the application logger (plain text in production)                           |
+| `scripts/docker-smoke.sh`          | Runs a built image like production (read-only, healthcheck) and checks that it works                |
 | `test/app.spec.ts`                 | Jest integration suite: HTTP infrastructure over the real surface                                   |
 | `contract/`                        | Executable parity spec (scenarios per group, one per `AUTH_MODE`)                                   |
 | `bruno/`                           | Bruno collection (runtime tokens never committed)                                                   |

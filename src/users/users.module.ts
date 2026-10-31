@@ -5,7 +5,7 @@ import { UsersController } from "./users.controller";
 /**
  * `/api/users` routes (admin CRUD, blocking, role changes, session revocation).
  * Imported by AppModule only when `features.auth`, keeping the routes exactly as
- * conditional as the reference (absent with AUTH_MODE=none).
+ * conditional as the Hono starter (absent with AUTH_MODE=none).
  */
 @Module({
   imports: [SessionsModule],

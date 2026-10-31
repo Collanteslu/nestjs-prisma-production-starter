@@ -10,7 +10,7 @@ import { IS_PUBLIC_KEY } from "../common/decorators/public.decorator";
 import type { AuthUserPayload, JwtPayload } from "../auth/auth.types";
 
 /**
- * Global authentication guard (port of the reference's authMiddleware): runs `authenticate`
+ * Global authentication guard (port of the Hono starter's authMiddleware): runs `authenticate`
  * on every matched route. The role attached to the request comes from the database, so
  * role changes apply immediately. `@Public()` routes and AUTH_MODE=none skip the guard
  * entirely, and requests already authenticated by AuthPrefixMiddleware are not re-verified.
@@ -42,7 +42,7 @@ export class JwtAuthGuard implements CanActivate {
   }
 
   /**
-   * Full authentication of a request (port of the reference's authMiddleware core).
+   * Full authentication of a request (port of the Hono starter's authMiddleware core).
    * 1. Cryptographic validation: verifies the JWT signature (HS256, JWT_SECRET).
    * 2. Real-time block checking: `user.isBlocked` is re-read from the database.
    * 3. Stateful session validation: the `sessionId` must exist and be active.

@@ -93,6 +93,8 @@ describe("TotpService", () => {
   it("normalizes recovery codes when hashing (case and whitespace insensitive)", () => {
     expect(totp.hashRecoveryCode("ABCD-EFGH")).toBe(totp.hashRecoveryCode("  abcd-efgh "));
     expect(totp.generateRecoveryCodes()).toHaveLength(10);
-    expect(totp.generateRecoveryCodes(3)[0]).toMatch(/^[a-z2-7]{4}-[a-z2-7]{4}-[a-z2-7]{4}-[a-z2-7]{4}$/);
+    expect(totp.generateRecoveryCodes(3)[0]).toMatch(
+      /^[a-z2-7]{4}-[a-z2-7]{4}-[a-z2-7]{4}-[a-z2-7]{4}$/,
+    );
   });
 });

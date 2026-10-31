@@ -3,7 +3,6 @@ import type { DynamicModule } from "@nestjs/common";
 import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
 import { RequestMethod } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from "@nestjs/core";
-import { ZodSerializerInterceptor } from "nestjs-zod";
 import type { Env } from "./config/env";
 import { featuresOf } from "./config/env";
 import { ConfigProviderModule } from "./config/config.module";
@@ -35,17 +34,16 @@ import { UsersModule } from "./users/users.module";
  * reads process.env on import (testable factory, per plan). APP_ENV/APP_FEATURES are
  * published by the global ConfigProviderModule.
  *
- * Global providers follow the reference's pipeline order:
- * guards (JWT auth → rate limit) → validation pipe → serializer →
- * envelope interceptor → exception filter.
- *
- * Interceptor registration order matters: TransformInterceptor (envelope) must be
- * OUTSIDE ZodSerializerInterceptor so serialized data is wrapped afterwards.
+ * Global providers follow the Hono starter's pipeline order:
+ * guards (JWT auth → rate limit) → validation pipe → envelope interceptor →
+ * exception filter. Responses are not schema-serialized by a global interceptor: no
+ * route declares a response DTO with @ZodSerializerDto, so nestjs-zod's
+ * ZodSerializerInterceptor would only have been a no-op on every request.
  */
 @Module({})
 export class AppModule implements NestModule {
   /**
-   * Port of the reference's prefix auth mounting (`app.use(prefix, authMiddleware)` +
+   * Port of the Hono starter's prefix auth mounting (`app.use(prefix, authMiddleware)` +
    * `app.use(prefix + "/*", authMiddleware)` for the four protected prefixes). It makes
    * authentication apply to each prefix and all its sub-paths, so an unauthenticated
    * request to an unmounted sub-path answers 401 rather than leaking a 404. The middleware
@@ -53,17 +51,15 @@ export class AppModule implements NestModule {
    * prefixes, so it can demand a token unconditionally.
    */
   configure(consumer: MiddlewareConsumer): void {
-    consumer
-      .apply(AuthPrefixMiddleware)
-      .forRoutes(
-        // Each protected prefix and all its sub-paths. Nest registers class middleware per
-        // matched route (not via Express `use()`), so the sub-path wildcard is explicit.
-        // In Express 5 / path-to-regexp v8 the wildcard is `{*splat}`.
-        ...["api/sessions", "api/users", "api/tasks", "api/audit-logs"].flatMap((prefix) => [
-          { path: prefix, method: RequestMethod.ALL },
-          { path: `${prefix}/{*splat}`, method: RequestMethod.ALL },
-        ]),
-      );
+    consumer.apply(AuthPrefixMiddleware).forRoutes(
+      // Each protected prefix and all its sub-paths. Nest registers class middleware per
+      // matched route (not via Express `use()`), so the sub-path wildcard is explicit.
+      // In Express 5 / path-to-regexp v8 the wildcard is `{*splat}`.
+      ...["api/sessions", "api/users", "api/tasks", "api/audit-logs"].flatMap((prefix) => [
+        { path: prefix, method: RequestMethod.ALL },
+        { path: `${prefix}/{*splat}`, method: RequestMethod.ALL },
+      ]),
+    );
   }
 
   static forRoot(env: Env): DynamicModule {
@@ -78,7 +74,7 @@ export class AppModule implements NestModule {
         MailModule,
         MfaModule, // TOTP/recovery-code services: global, always present (login may need them)
         TasksModule, // public/ownerless with AUTH_MODE=none, bearer-protected otherwise
-        // The auth stack (and its routes) exists exactly when the reference mounts it
+        // The auth stack (and its routes) exists exactly when the Hono starter mounts it
         ...(features.auth ? [SessionsModule, AuthModule, UsersModule, AuditLogsModule] : []),
         // Account security (recovery emails + MFA management) is AUTH_MODE=full only
         ...(features.accountSecurity ? [RecoveryModule, MfaRoutesModule] : []),
@@ -94,7 +90,6 @@ export class AppModule implements NestModule {
         { provide: APP_GUARD, useClass: RateLimitGuard },
         { provide: APP_PIPE, useClass: ContractValidationPipe },
         { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
-        { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor },
         { provide: APP_FILTER, useClass: AllExceptionsFilter },
       ],
     };

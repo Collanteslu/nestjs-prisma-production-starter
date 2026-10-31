@@ -9,7 +9,7 @@ export const ACCESS_TOKEN_TTL_SECONDS = 60 * 15;
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 /**
- * Signs and verifies the two token families of the reference implementation:
+ * Signs and verifies the two token families of the Hono starter:
  * - Access token  (JWT_SECRET, 15 min): userId, sessionId, email, role.
  * - Refresh token (JWT_REFRESH_SECRET, absolute session expiry): userId, sessionId, jti.
  */

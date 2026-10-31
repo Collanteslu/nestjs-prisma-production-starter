@@ -32,7 +32,7 @@ function isBodyParserError(exception: unknown): exception is BodyParserError {
 }
 
 /**
- * Global exception filter → reference error envelope:
+ * Global exception filter → the Hono starter's error envelope:
  *   { success: false, message, errors?: {field:[messages]}, meta: {...} }
  * with the correct HTTP status (400 validation/malformed, 404, 409, 413, 429, 500...).
  */
@@ -66,7 +66,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       status = 500;
       message = INTERNAL_ERROR_MESSAGE;
     } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
-      // Same mapping as the reference error handler (P2002 → 409, P2025 → 404)
+      // Same mapping as the Hono starter error handler (P2002 → 409, P2025 → 404)
       if (exception.code === "P2002") {
         status = 409;
         message = "Conflict: A record with the same unique value already exists.";
@@ -79,7 +79,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = INTERNAL_ERROR_MESSAGE;
       }
     } else if (exception instanceof RateLimitedException) {
-      // The reference limiter answers with its own body shape: top-level retryAfterSeconds
+      // The Hono starter limiter answers with its own body shape: top-level retryAfterSeconds
       status = exception.getStatus();
       message = exception.message;
       retryAfterSeconds = exception.retryAfterSeconds;
@@ -92,7 +92,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const request = host.switchToHttp().getRequest<{ method: string; path: string }>();
-      // Nest's built-in routing 404 ("Cannot GET /path") is reworded to the reference's
+      // Nest's built-in routing 404 ("Cannot GET /path") is reworded to the Hono starter's
       // not-found envelope: `Route not found: <METHOD> <path>`
       if (exception instanceof NotFoundException && /^Cannot [A-Z]+ /.test(exception.message)) {
         message = `Route not found: ${request.method} ${request.path}`;
@@ -124,7 +124,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       );
       status = 500;
       message = INTERNAL_ERROR_MESSAGE;
-      // Parity: the reference leaks err.message under `details`, development only
+      // Parity: the Hono starter leaks err.message under `details`, development only
       if (
         process.env.NODE_ENV === "development" &&
         exception instanceof Error &&

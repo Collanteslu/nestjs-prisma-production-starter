@@ -31,7 +31,7 @@ import { SessionsService } from "../sessions/sessions.service";
 /**
  * DELETE /api/users/:id/mfa — admin reset for users who lost their device and recovery
  * codes. Mounted under /api/users only when AUTH_MODE=full (route parity with the
- * reference's userMfaRoutes).
+ * Hono starter's userMfaRoutes).
  */
 @ApiTags("Users")
 @ApiBearerAuth("BearerAuth")

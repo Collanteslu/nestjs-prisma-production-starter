@@ -5,6 +5,7 @@ import helmet from "helmet";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { cleanupOpenApiDoc } from "nestjs-zod";
 import { apiReference } from "@scalar/nestjs-api-reference";
+import { docsEnabled } from "./config/env";
 import type { Env, Features } from "./config/env";
 import {
   BODY_LIMIT_BYTES,
@@ -32,16 +33,11 @@ export const bodyErrorHandler: ErrorRequestHandler = (err, _req, res, next) => {
   next(err);
 };
 
-/** Documentation is enabled by default outside production (override with ENABLE_DOCS). */
-export function docsEnabled(env: Env): boolean {
-  return env.ENABLE_DOCS ?? env.NODE_ENV !== "production";
-}
-
 /**
  * Scalar renders its UI from an inlined script and stylesheet, which Helmet's strict
  * default CSP blocks. The relaxation is applied ONLY to /docs responses; every other
  * response keeps the default Helmet CSP (item 11: keep the exception scoped to the route
- * that needs it). `frame-ancestors 'none'` still prevents embedding the reference page.
+ * that needs it). `frame-ancestors 'none'` still prevents embedding the Hono starter page.
  */
 const DOCS_CSP = [
   "default-src 'self'",
@@ -83,9 +79,9 @@ export function securityHeadersMiddleware(
  *   envelope → /openapi.json + /docs (Scalar) → [Nest router: guards → pipes →
  *   interceptors → controllers → built-in routing 404 translated by the filter]
  *
- * Settings pinned for parity with the reference (Express 5 defaults differ):
+ * Settings pinned for parity with the Hono starter (Express 5 defaults differ):
  *   - `query parser simple` → literal `filter[title]` keys (not qs-nested objects)
- *   - ETag disabled, X-Powered-By disabled (absent in the reference responses)
+ *   - ETag disabled, X-Powered-By disabled (absent in the Hono starter responses)
  */
 export async function configureApp(
   app: INestApplication,
@@ -133,7 +129,7 @@ export async function configureApp(
       )
       .setVersion(API_VERSION);
 
-    // The security scheme is only published when auth is mounted (the reference omits it
+    // The security scheme is only published when auth is mounted (the Hono starter omits it
     // entirely with AUTH_MODE=none)
     if (features.auth) {
       builder.addBearerAuth(
@@ -162,7 +158,7 @@ export async function configureApp(
       },
     ];
 
-    // Parity with the reference's `documentForMode`: with AUTH_MODE=none the published
+    // Parity with the Hono starter's `documentForMode`: with AUTH_MODE=none the published
     // spec carries no security and no auth responses (the @ApiBearerAuth decorator cannot
     // see the injected config, so its output is adjusted here, together with any scheme
     // the decorator may have declared).

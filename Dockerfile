@@ -2,7 +2,9 @@
 # Etapa 1: Dependencias y Compilación
 # ==========================================
 # Base fijada por digest (builds reproducibles, item 13): actualízala junto con un
-# smoke test de `docker run` (Dependabot propone el bump semanalmente)
+# smoke test de `docker run` (Dependabot propone el bump semanalmente).
+# Node 24 es LTS (Node 25 es una versión impar, sin LTS y con soporte corto) y
+# coincide con `engines.node`, con la CI y con AGENTS.md.
 FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS builder
 
 WORKDIR /app
@@ -55,19 +57,25 @@ RUN chmod +x docker-entrypoint.sh
 # `prisma` es dependencia de producción: el entrypoint aplica migraciones en el arranque.
 USER node
 ENV HUSKY=0
-RUN npm ci --omit=dev --ignore-scripts
-# --ignore-scripts también bloqueó la descarga del schema-engine que `prisma migrate
-# deploy` necesita: se reconstruyen SOLO los paquetes de Prisma (scripts puntuales,
-# sin reactivar prepare/husky del resto de la instalación)
-RUN npm rebuild @prisma/engines prisma
-# El runtime solo necesita node: se elimina el toolchain npm. Además de reducir la
-# superficie, retira de la imagen las dependencias que npm vendoriza consigo mismo
-# (undici, brace-expansion… — con CVEs propios que Trivy detecta y que esta plantilla
-# no puede actualizar: son del npm de la imagen base). El entrypoint ejecuta la CLI de
-# Prisma con `node node_modules/prisma/build/index.js` (sin npx).
+# Una sola capa (`RUN`): lo que se borra aquí no queda almacenado en una capa anterior.
+#  1. --ignore-scripts también bloqueó la descarga del schema-engine que `prisma migrate
+#     deploy` necesita: sin él, el primer arranque intenta descargarlo y FALLA con el sistema
+#     de ficheros de solo lectura (`docker run --read-only`). Se reconstruyen SOLO los
+#     paquetes de Prisma en el build (scripts puntuales, sin reactivar prepare/husky).
+#  2. `typescript` entra en producción como peer opcional de Prisma; ni el cliente ni las
+#     migraciones lo necesitan en ejecución: se elimina del runtime.
+RUN npm ci --omit=dev --ignore-scripts \
+  && npm rebuild @prisma/engines prisma \
+  && rm -rf node_modules/typescript node_modules/@typescript \
+  && npm cache clean --force
+# El runtime solo necesita node: se elimina el toolchain npm (y corepack/yarn de la imagen
+# base). Además de reducir la superficie, retira de la imagen las dependencias que npm
+# vendoriza consigo mismo (tar, undici, brace-expansion… — con CVEs propios que Trivy
+# detecta y que esta plantilla no puede actualizar: son del npm de la imagen base). El
+# entrypoint ejecuta la CLI de Prisma con `node node_modules/prisma/build/index.js` (sin npx).
 USER root
-RUN rm -rf /usr/local/lib/node_modules/npm \
-  && rm -f /usr/local/bin/npm /usr/local/bin/npx
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 USER node
 
 # Copiar el código compilado y el cliente generado de Prisma
