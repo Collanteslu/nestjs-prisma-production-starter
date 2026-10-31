@@ -45,15 +45,15 @@ export class LoginLockoutService {
   }
 
   async recordFailure(account: string): Promise<void> {
-    await this.store.hit(this.keyOf(account), this.lockoutMs);
-    // The lockout is measured from the last failure, not from the first one
-    await this.store.slide(this.keyOf(account), this.lockoutMs);
-    // Alert hook: fires exactly once, when the account crosses the threshold
-    const bucket = await this.store.peek(this.keyOf(account));
-    if (bucket && bucket.count === this.maxFailures) {
+    // One atomic store statement: the count and the sliding window (measured from the last
+    // failure) change together. The count is this failure's own, so it equals maxFailures for
+    // exactly one failure: the alert fires once per engagement.
+    const hit = await this.store.hit(this.keyOf(account), this.lockoutMs, { slide: true });
+    if (hit.count === this.maxFailures) {
+      const until = new Date(Date.now() + this.lockoutMs);
       this.logger.warn(
         `Account lockout engaged after ${this.maxFailures} failed login attempts ` +
-          `(account=${pseudonym(this.env.JWT_SECRET, account)}, until=${bucket.resetAt.toISOString()})`,
+          `(account=${pseudonym(this.env.JWT_SECRET, account)}, until=${until.toISOString()})`,
       );
     }
   }

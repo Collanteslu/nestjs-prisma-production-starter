@@ -1,5 +1,13 @@
 import { Controller, Get, Query, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from "@nestjs/swagger";
 import { AdminGuard } from "../auth/admin.guard";
 import { buildPagination } from "../common/utils/pagination";
 import type { Prisma } from "../generated/client/client";
@@ -34,6 +42,9 @@ export class AuditController {
       "Acciones registradas: LOGIN, LOGIN_FAILED, LOGOUT, REGISTER, CREATE, UPDATE, PASSWORD_CHANGE, PASSWORD_RESET_REQUESTED, PASSWORD_RESET, EMAIL_VERIFIED, MFA_ENABLED, MFA_DISABLED, MFA_RESET, ROLE_CHANGE, SOFT_DELETE, RESTORE, DELETE_PERMANENT, BLOCK, UNBLOCK, REVOKE_SESSION, REVOKE_ALL_SESSIONS, TOKEN_REUSE_DETECTED.",
   })
   @ApiOkResponse({ description: "Lista paginada de logs de auditoría" })
+  @ApiBadRequestResponse({ description: "Error de validación en los filtros" })
+  @ApiUnauthorizedResponse({ description: "Token ausente o inválido" })
+  @ApiForbiddenResponse({ description: "Solo administradores" })
   async list(@Query() dto: AuditQuery) {
     const { page, limit, entity, action, userId } = dto;
 
