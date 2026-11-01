@@ -84,7 +84,7 @@ describe("hardening regressions", () => {
       expect(active).toHaveLength(3);
       // The first (oldest) session is the one revoked; the newest ones stay usable
       const oldest = await prisma.session.findUnique({ where: { id: logins[0] } });
-      expect(oldest?.isActive).toBe(false);
+      expect(oldest).toBeNull();
       const newest = await prisma.session.findUnique({ where: { id: logins[3] } });
       expect(newest?.isActive).toBe(true);
     });
