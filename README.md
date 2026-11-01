@@ -43,7 +43,7 @@ npx prisma migrate deploy
 npm run dev
 ```
 
-The API listens at <http://localhost:3011>. In development, the empty database is seeded with `admin@example.com` and `ana@example.com`, both using the example password `password123`. Change or remove these accounts before using a shared environment.
+The API listens at <http://localhost:3011>. When `SEED_DEMO=true` (set in `.env.example` for local development), the empty database is seeded with `admin@example.com` and `ana@example.com`, both using the example password `password123`. Change or remove these accounts before using a shared environment.
 
 ## Authentication modes
 

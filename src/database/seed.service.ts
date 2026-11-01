@@ -72,6 +72,13 @@ export class SeedService {
       return;
     }
 
+    if (usersCount === 0 && !this.env.SEED_DEMO) {
+      this.logger.log(
+        "Empty database: demo accounts not created (set SEED_DEMO=true for local development)",
+      );
+      return;
+    }
+
     if (usersCount === 0) {
       this.logger.log("🌱 Initializing database with default seeded accounts and tasks...");
 

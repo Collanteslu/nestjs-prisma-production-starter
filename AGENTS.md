@@ -36,8 +36,9 @@ npx prisma migrate deploy  # creates/updates dev.db
 npm run dev                # http://localhost:3011 (docs at /docs)
 ```
 
-Outside production an empty database is seeded with demo data (`admin@example.com` /
-`ana@example.com`, password `password123`; with `AUTH_MODE=none`, two public tasks).
+With `SEED_DEMO=true` (set in `.env.example`, required explicitly — `NODE_ENV` alone never seeds, and
+production rejects it) an empty database is seeded with demo data (`admin@example.com` /
+`ana@example.com`, password `password123`). With `AUTH_MODE=none`, two public tasks are seeded outside production.
 Environment variables are validated in `src/config/env.ts` and `main.ts` exits with a
 readable message when a combination is invalid (`loadEnv()` fails fast before anything
 touches the network or the database).

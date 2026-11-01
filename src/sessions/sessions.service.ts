@@ -61,12 +61,34 @@ export class SessionsService {
       }),
     ]);
 
+    await this.enforceActiveSessionLimit(user.id);
+
     return {
       accessToken,
       refreshToken,
       expiresIn: ACCESS_TOKEN_TTL_SECONDS,
       sessionId,
     };
+  }
+
+  /**
+   * Caps the active sessions of an account at MAX_ACTIVE_SESSIONS: the oldest ones beyond the cap
+   * are revoked (same semantics as revokeSession). Bounds the rows a single account, or a stolen
+   * credential, can accumulate by logging in repeatedly.
+   */
+  private async enforceActiveSessionLimit(userId: string): Promise<void> {
+    const excess = await this.prisma.session.findMany({
+      where: { userId, isActive: true },
+      orderBy: { createdAt: "desc" },
+      skip: this.env.MAX_ACTIVE_SESSIONS,
+      select: { id: true },
+    });
+    if (excess.length === 0) return;
+    const ids = excess.map((session) => session.id);
+    await this.prisma.$transaction([
+      this.prisma.session.updateMany({ where: { id: { in: ids } }, data: { isActive: false } }),
+      this.prisma.refreshToken.deleteMany({ where: { sessionId: { in: ids } } }),
+    ]);
   }
 
   /**

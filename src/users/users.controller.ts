@@ -63,9 +63,11 @@ import {
 
 // Soft-deleted tasks are left out of `?include=tasks` on purpose: the task list hides them the same
 // way unless the caller explicitly asks for them. The relation stays unbounded.
+// Relations are capped: an unbounded include loads every row of a heavy account in one response.
+// Tasks keep the oldest first (the list's natural order); sessions show the most recent first.
 const USER_INCLUDES = {
-  tasks: { where: { deletedAt: null } },
-  sessions: true,
+  tasks: { where: { deletedAt: null }, orderBy: { createdAt: "asc" as const }, take: 100 },
+  sessions: { orderBy: { createdAt: "desc" as const }, take: 50 },
 };
 
 /**
@@ -253,6 +255,16 @@ export class UsersController {
       // duplicate the account list's personal data
       details: { account: pseudonym(this.env.JWT_SECRET, email), role },
     });
+
+    // Same as self-service registration: the account starts unverified, so it gets its
+    // verification link (durable outbox, delivered in the background). Without it, an admin-created
+    // account under REQUIRE_EMAIL_VERIFICATION could never sign in.
+    if (this.features.accountSecurity && this.env.MAIL_TRANSPORT !== "none") {
+      inBackground(async () => {
+        await this.outbox.enqueueOp(newUser.id, "email_verify");
+        this.outbox.kick();
+      });
+    }
 
     return { message: "User created successfully with hashed credentials.", data: newUser };
   }
