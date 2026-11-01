@@ -69,6 +69,15 @@ export const envSchema = z
     LOGIN_LOCKOUT_MINUTES: z.coerce.number().positive().default(15),
     // Audit entries older than this many days are purged (0 keeps them forever)
     AUDIT_RETENTION_DAYS: z.coerce.number().int().min(0).default(90),
+    // Maximum simultaneously active sessions per account; logging in beyond it revokes the oldest
+    MAX_ACTIVE_SESSIONS: z.coerce.number().int().min(1).max(100).default(20),
+    // Creates the demo accounts (admin@example.com / ana@example.com, password123) on an empty
+    // database. Explicit opt-in: NODE_ENV alone is not enough, because a staging host with
+    // NODE_ENV=development would otherwise get a well-known administrator. Rejected in production.
+    SEED_DEMO: z
+      .string()
+      .optional()
+      .transform((val) => val === "true" || val === "1"),
     // --- Account recovery, email verification and two-factor authentication ---
     // "none" disables outgoing mail (default in production), "log" prints messages to the log
     // (default elsewhere, handy in development), "memory" keeps them in an array (tests only).
@@ -181,6 +190,13 @@ export const envSchema = z
     }
     if (cfg.NODE_ENV !== "production") return;
     // Production hardening below
+    if (cfg.SEED_DEMO) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["SEED_DEMO"],
+        message: "SEED_DEMO=true creates well-known demo accounts: not allowed in production",
+      });
+    }
     if (cfg.MAIL_TRANSPORT === "memory") {
       ctx.addIssue({
         code: "custom",

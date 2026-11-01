@@ -134,6 +134,7 @@ jobs:
         run: |
           nohup env PORT=3011 \
             AUTH_MODE=${{ matrix.mode }} \
+            SEED_DEMO=true \
             DATABASE_URL=file:./contract-ci.db \
             JWT_SECRET=contract-ci-secret-0123456789abcdef0123456789 \
             JWT_REFRESH_SECRET=contract-ci-refresh-abcdef0123456789abcdef01 \
