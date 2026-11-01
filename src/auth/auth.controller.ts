@@ -118,7 +118,7 @@ export class AuthController {
   @ApiOperation({
     summary: "Inicio de sesión (Login)",
     description:
-      "Autentica credenciales y emite Access Token (15 min) y Refresh Token (7 días). Protegido por rate limit por IP y bloqueo por cuenta tras 5 intentos fallidos (15 min).",
+      "Autentica credenciales y emite Access Token (15 min) y Refresh Token (7 días). Protegido por rate limit por IP y bloqueo por cuenta tras 5 intentos fallidos (15 min). Si la cuenta supera `MAX_ACTIVE_SESSIONS` sesiones activas, se revocan las más antiguas.",
   })
   @ApiOkResponse({ description: "Login exitoso" })
   @ApiBadRequestResponse({ description: "Error de validación o JSON mal formado" })

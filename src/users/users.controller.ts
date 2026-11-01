@@ -223,7 +223,7 @@ export class UsersController {
   @ApiOperation({
     summary: "Crear usuario (Solo Admin)",
     description:
-      "Permite asignar cualquier rol. El registro público está en `POST /api/auth/register`.",
+      "Permite asignar cualquier rol. La cuenta empieza sin verificar y recibe el enlace de verificación por email. El registro público está en `POST /api/auth/register`.",
   })
   @ApiCreatedResponse({ description: "Usuario creado" })
   @ApiBadRequestResponse({ description: "Error de validación" })

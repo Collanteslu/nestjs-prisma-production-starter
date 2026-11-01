@@ -205,7 +205,8 @@ export class MfaController {
   @RateLimit("mfa")
   @ApiOperation({
     summary: "Desactivar el 2FA",
-    description: "Exige la contraseña y un código TOTP o un código de recuperación.",
+    description:
+      "Exige la contraseña y un código TOTP o un código de recuperación. Los fallos (contraseña o código) cuentan contra el bloqueo de confirmación de la cuenta.",
   })
   @ApiOkResponse({ description: "2FA desactivado" })
   @ApiBadRequestResponse({ description: "Error de validación" })
