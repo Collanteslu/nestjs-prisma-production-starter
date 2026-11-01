@@ -212,9 +212,9 @@ Deliberate choices inherited from the Hono starter and kept, with their compensa
   `openAllowed`) — hook log-based alerting on those lines. `RATE_LIMIT_ON_DB_FAILURE=open`
   restores fail-open everywhere for availability-first deployments.
 - **Active-session cap (`MAX_ACTIVE_SESSIONS`, default 20).** Each login beyond the cap revokes
-  the oldest active sessions of that account (same effect as `revokeSession`), so one account,
-  or a stolen credential, cannot accumulate unbounded active sessions. The revoked rows are purged
-  by the cleanup job like any other inactive session.
+  the oldest active sessions of that account: they are deleted at once (with their refresh tokens),
+  so one account, or a stolen credential, cannot accumulate unbounded session rows and no revoked
+  row lingers until the cleanup job. Their access tokens are rejected like any revoked session's.
 - **Wildcard CORS in production (item 15).** `CORS_ORIGINS=*` is rejected at startup
   unless `CORS_ALLOW_WILDCARD=true` makes the choice explicit and reviewable.
 - **Registration reveals duplicates (enumeration).** `POST /api/auth/register` answers

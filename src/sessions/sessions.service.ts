@@ -73,8 +73,9 @@ export class SessionsService {
 
   /**
    * Caps the active sessions of an account at MAX_ACTIVE_SESSIONS: the oldest ones beyond the cap
-   * are revoked (same semantics as revokeSession). Bounds the rows a single account, or a stolen
-   * credential, can accumulate by logging in repeatedly.
+   * are DELETED (their refresh tokens cascade), not left inactive for the cleanup job. Bounds the
+   * rows a single account, or a stolen credential, can accumulate by logging in repeatedly; an
+   * access token of a removed session is rejected exactly like one of a revoked session.
    */
   private async enforceActiveSessionLimit(userId: string): Promise<void> {
     const excess = await this.prisma.session.findMany({
@@ -86,8 +87,8 @@ export class SessionsService {
     if (excess.length === 0) return;
     const ids = excess.map((session) => session.id);
     await this.prisma.$transaction([
-      this.prisma.session.updateMany({ where: { id: { in: ids } }, data: { isActive: false } }),
       this.prisma.refreshToken.deleteMany({ where: { sessionId: { in: ids } } }),
+      this.prisma.session.deleteMany({ where: { id: { in: ids } } }),
     ]);
   }
 
