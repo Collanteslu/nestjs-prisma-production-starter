@@ -36,8 +36,9 @@ npx prisma migrate deploy  # creates/updates dev.db
 npm run dev                # http://localhost:3011 (docs at /docs)
 ```
 
-Outside production an empty database is seeded with demo data (`admin@example.com` /
-`ana@example.com`, password `password123`; with `AUTH_MODE=none`, two public tasks).
+With `SEED_DEMO=true` (set in `.env.example`, required explicitly — `NODE_ENV` alone never seeds, and
+production rejects it) an empty database is seeded with demo data (`admin@example.com` /
+`ana@example.com`, password `password123`). With `AUTH_MODE=none`, two public tasks are seeded outside production.
 Environment variables are validated in `src/config/env.ts` and `main.ts` exits with a
 readable message when a combination is invalid (`loadEnv()` fails fast before anything
 touches the network or the database).
@@ -49,7 +50,7 @@ npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/s
 npm run typecheck
 npm run lint
 npm run build
-npm audit --omit=dev --audit-level=high
+npm audit --audit-level=high
 npm test                    # Jest: crea y migra su propia BD SQLite temporal
 ```
 
@@ -77,7 +78,7 @@ After changing the `Dockerfile` or `docker-entrypoint.sh`, run
 `docker build -t nestjs-api:ci . && scripts/docker-smoke.sh nestjs-api:ci`
 (read-only filesystem, migrations, admin login, `HEALTHCHECK`, non-root user).
 `npm run test:e2e` (`test-api.sh`) is an optional curl suite against a running dev
-server: it needs the demo accounts and `AUTH_MODE=full`.
+server started with `SEED_DEMO=true` (the demo accounts) and `AUTH_MODE=full`.
 
 ## Contract parity
 
@@ -86,7 +87,7 @@ scenarios grouped in `auth`, `sessions`, `tasks`, `users`, `audit`, `system`, `m
 `recovery` and `mfa`. Every phase of this repository was gated on it.
 
 ```bash
-npm run build && PORT=3011 npm start &
+npm run build && SEED_DEMO=true PORT=3011 npm start &
 npm run contract -- --base http://127.0.0.1:3011 --mode full --db ./dev.db --group auth
 ```
 
@@ -210,6 +211,10 @@ Deliberate choices inherited from the Hono starter and kept, with their compensa
   `RateLimitGuard.metrics` (`storeFailures`, `localAllowed`, `localBlocked`,
   `openAllowed`) — hook log-based alerting on those lines. `RATE_LIMIT_ON_DB_FAILURE=open`
   restores fail-open everywhere for availability-first deployments.
+- **Active-session cap (`MAX_ACTIVE_SESSIONS`, default 20).** Each login beyond the cap revokes
+  the oldest active sessions of that account: they are deleted at once (with their refresh tokens),
+  so one account, or a stolen credential, cannot accumulate unbounded session rows and no revoked
+  row lingers until the cleanup job. Their access tokens are rejected like any revoked session's.
 - **Wildcard CORS in production (item 15).** `CORS_ORIGINS=*` is rejected at startup
   unless `CORS_ALLOW_WILDCARD=true` makes the choice explicit and reviewable.
 - **Registration reveals duplicates (enumeration).** `POST /api/auth/register` answers

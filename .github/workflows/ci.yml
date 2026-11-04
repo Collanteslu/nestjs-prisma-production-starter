@@ -2,9 +2,9 @@ name: CI & Typecheck
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 # Read-only token for the workflow; cancel superseded runs of the same branch/PR
 permissions:
@@ -28,7 +28,7 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: 'npm'
+          cache: "npm"
 
       - name: 📦 Instalar dependencias
         run: npm ci
@@ -63,10 +63,10 @@ jobs:
           # Fijado explícito: la versión por defecto de la acción 0.33.1 (v0.65.0) es una
           # tag sin release ni assets y su instalación falla siempre; v0.76.1 verificado
           version: v0.76.1
-          image-ref: 'nestjs-api:ci'
-          format: 'table'
-          exit-code: '1'
-          severity: 'HIGH,CRITICAL'
+          image-ref: "nestjs-api:ci"
+          format: "table"
+          exit-code: "1"
+          severity: "HIGH,CRITICAL"
           ignore-unfixed: true
 
       # SBOM de la imagen (CycloneDX) como artefacto del build — decisión de endurecimiento:
@@ -76,10 +76,10 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.76.1
-          image-ref: 'nestjs-api:ci'
-          format: 'cyclonedx'
-          output: 'sbom.cdx.json'
-          exit-code: '0'
+          image-ref: "nestjs-api:ci"
+          format: "cyclonedx"
+          output: "sbom.cdx.json"
+          exit-code: "0"
 
       - name: 📦 Publicar el SBOM
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -114,7 +114,7 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: 'npm'
+          cache: "npm"
 
       - name: 📦 Instalar dependencias
         run: npm ci
@@ -134,6 +134,7 @@ jobs:
         run: |
           nohup env PORT=3011 \
             AUTH_MODE=${{ matrix.mode }} \
+            SEED_DEMO=true \
             DATABASE_URL=file:./contract-ci.db \
             JWT_SECRET=contract-ci-secret-0123456789abcdef0123456789 \
             JWT_REFRESH_SECRET=contract-ci-refresh-abcdef0123456789abcdef01 \

@@ -134,7 +134,7 @@ const listParams = {
 export const taskQuerySchema = z.object({
   ...listParams,
   completed: z.enum(["true", "false"]).optional(),
-  sortBy: z.enum(["createdAt", "title"]).default("createdAt"),
+  sortBy: z.enum(["createdAt", "title", "completed"]).default("createdAt"),
   userId: z.string().min(1).max(100).optional().meta({
     description: "Solo Admin: lista las tareas de ese usuario en lugar de las propias",
   }),
@@ -190,7 +190,7 @@ export const userQuerySchema = z.object({
   ...listParams,
   role: z.enum(["admin", "user"]).optional(),
   isBlocked: z.enum(["true", "false"]).optional(),
-  sortBy: z.enum(["createdAt", "name", "email"]).default("createdAt"),
+  sortBy: z.enum(["createdAt", "name", "email", "role"]).default("createdAt"),
 });
 
 /** Esquema para cambiar el rol de un usuario */

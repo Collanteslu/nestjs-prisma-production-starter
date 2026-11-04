@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, HttpCode, Inject, Post, Req } from "@nestjs/common";
 import {
+  ApiAcceptedResponse,
   ApiBadRequestResponse,
   ApiOkResponse,
   ApiOperation,
@@ -79,7 +80,9 @@ export class RecoveryController {
     description:
       "Si existe una cuenta activa con ese email, se le envía un enlace de un solo uso (válido `PASSWORD_RESET_TTL_MINUTES`). La respuesta es siempre 202, exista o no la cuenta.",
   })
-  @ApiOkResponse({ description: "Solicitud aceptada (se responde igual exista o no la cuenta)" })
+  @ApiAcceptedResponse({
+    description: "Solicitud aceptada (se responde igual exista o no la cuenta)",
+  })
   @ApiBadRequestResponse({ description: "Error de validación" })
   @ApiTooManyRequestsResponse({ description: "Rate limit excedido" })
   async forgotPassword(@Body() dto: ForgotPasswordRequest, @Req() req: Request) {
@@ -206,7 +209,9 @@ export class RecoveryController {
     summary: "Reenviar el email de verificación",
     description: "Respuesta 202 siempre. Máximo 3 correos por dirección y hora.",
   })
-  @ApiOkResponse({ description: "Solicitud aceptada (se responde igual exista o no la cuenta)" })
+  @ApiAcceptedResponse({
+    description: "Solicitud aceptada (se responde igual exista o no la cuenta)",
+  })
   @ApiBadRequestResponse({ description: "Error de validación" })
   @ApiTooManyRequestsResponse({ description: "Rate limit excedido" })
   async resendVerification(@Body() dto: ResendVerificationRequest, @Req() req: Request) {

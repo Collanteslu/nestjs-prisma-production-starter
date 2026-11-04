@@ -205,7 +205,8 @@ export class MfaController {
   @RateLimit("mfa")
   @ApiOperation({
     summary: "Desactivar el 2FA",
-    description: "Exige la contraseña y un código TOTP o un código de recuperación.",
+    description:
+      "Exige la contraseña y un código TOTP o un código de recuperación. Los fallos (contraseña o código) cuentan contra el bloqueo de confirmación de la cuenta.",
   })
   @ApiOkResponse({ description: "2FA desactivado" })
   @ApiBadRequestResponse({ description: "Error de validación" })
@@ -236,10 +237,13 @@ export class MfaController {
       await this.confirmLockout.recordFailure(user.id);
       throw new ForbiddenException("Current password or code is incorrect.");
     }
-    await this.confirmLockout.reset(user.id);
+    // The second factor is part of the same confirmation: a wrong code counts against the same
+    // per-account lockout, and the counter is cleared only once both factors are correct.
     if (!(await this.mfa.verifySecondFactor(user, { code, recoveryCode }))) {
+      await this.confirmLockout.recordFailure(user.id);
       throw new ForbiddenException("Current password or code is incorrect.");
     }
+    await this.confirmLockout.reset(user.id);
 
     await this.prisma.$transaction([
       this.prisma.user.update({

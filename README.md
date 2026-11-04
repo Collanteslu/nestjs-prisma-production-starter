@@ -11,7 +11,7 @@ A reusable REST API starter built with NestJS 12, Prisma 7, SQLite/libSQL, Zod 4
 ## Features
 
 - Selectable `AUTH_MODE=none | basic | full`; disabled modules are absent from routing and OpenAPI.
-- JWT access tokens, hashed rotating refresh tokens, session revocation, login lockout and database-backed rate limits.
+- JWT access tokens, hashed rotating refresh tokens, session revocation (capped per account by `MAX_ACTIVE_SESSIONS`), login lockout and database-backed rate limits.
 - User and task APIs, role checks, ownership enforcement, soft delete/restore and audit logs.
 - Optional email verification, password recovery, TOTP MFA and recovery codes.
 - Zod request validation, a consistent response envelope, request IDs and OpenAPI/Scalar at `/docs`.
@@ -43,7 +43,7 @@ npx prisma migrate deploy
 npm run dev
 ```
 
-The API listens at <http://localhost:3011>. In development, the empty database is seeded with `admin@example.com` and `ana@example.com`, both using the example password `password123`. Change or remove these accounts before using a shared environment.
+The API listens at <http://localhost:3011>. When `SEED_DEMO=true` (set in `.env.example` for local development), the empty database is seeded with `admin@example.com` and `ana@example.com`, both using the example password `password123`. Change or remove these accounts before using a shared environment.
 
 ## Authentication modes
 
@@ -70,11 +70,11 @@ npm run typecheck
 npm run lint
 npm run build
 npm test
-npm audit --omit=dev --audit-level=high
+npm audit --audit-level=high
 npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
 ```
 
-For HTTP contract checks, start the API on an isolated database and set `APP_URL` to the same base URL used by the contract runner when testing email links. For example, with a server at `http://127.0.0.1:3911`, run `node contract/run.mjs --base http://127.0.0.1:3911 --mode full --db /path/to/the-server.db`. The runner includes a local SMTP sink for recovery scenarios. Use separate databases for each mode.
+For HTTP contract checks, start the API on an isolated database with `SEED_DEMO=true` (the scenarios log in with the demo accounts) and set `APP_URL` to the same base URL used by the contract runner when testing email links. For example, with a server at `http://127.0.0.1:3911`, run `node contract/run.mjs --base http://127.0.0.1:3911 --mode full --db /path/to/the-server.db`. The runner includes a local SMTP sink for recovery scenarios. Use separate databases for each mode.
 
 ## Docker
 

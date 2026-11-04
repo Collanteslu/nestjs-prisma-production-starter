@@ -11,6 +11,8 @@ export const RATE_LIMITS = {
   // Per-IP limits for the auth endpoints (name → window + env-backed max)
   login: { windowMs: 60_000, max: (env: Env) => env.LOGIN_RATE_LIMIT_MAX },
   refresh: { windowMs: 60_000, max: (env: Env) => env.REFRESH_RATE_LIMIT_MAX },
+  // Logout only costs one indexed lookup, but it must not be hammerable either
+  logout: { windowMs: 60_000, max: (env: Env) => env.LOGOUT_RATE_LIMIT_MAX },
   register: { windowMs: 60 * 60_000, max: (env: Env) => env.REGISTER_RATE_LIMIT_MAX },
   // Per-IP limits for the recovery endpoints (per hour) and the MFA endpoints (per minute)
   "forgot-password": { windowMs: 60 * 60_000, max: (env: Env) => env.RECOVERY_RATE_LIMIT_MAX },

@@ -3,6 +3,7 @@ import type { Features } from "../config/env";
 import type { Env } from "../config/env";
 import { APP_ENV, APP_FEATURES } from "../config/tokens";
 import { hashPassword } from "../common/utils/password";
+import { pseudonym } from "../common/utils/pii";
 import { PrismaService } from "./prisma.service";
 
 /**
@@ -53,7 +54,10 @@ export class SeedService {
     if (this.env.NODE_ENV === "production") {
       if (usersCount === 0 && this.env.ADMIN_EMAIL && this.env.ADMIN_PASSWORD) {
         this.logger.log(
-          `👑 Bootstrapping initial production administrator: ${this.env.ADMIN_EMAIL}...`,
+          `👑 Bootstrapping initial production administrator (account=${pseudonym(
+            this.env.JWT_SECRET,
+            this.env.ADMIN_EMAIL,
+          )})...`,
         );
         const hashedPassword = await hashPassword(this.env.ADMIN_PASSWORD);
         await this.prisma.user.create({
@@ -69,6 +73,13 @@ export class SeedService {
       } else {
         this.logger.log("🔒 Production mode active: Demo seeder disabled.");
       }
+      return;
+    }
+
+    if (usersCount === 0 && !this.env.SEED_DEMO) {
+      this.logger.log(
+        "Empty database: demo accounts not created (set SEED_DEMO=true for local development)",
+      );
       return;
     }
 
