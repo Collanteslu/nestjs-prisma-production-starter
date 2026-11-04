@@ -32,7 +32,9 @@ export const envSchema = z
     TURSO_DATABASE_URL: z.string().optional(),
     TURSO_AUTH_TOKEN: z.string().optional(),
     TRUST_PROXY: z
-      .string()
+      .enum(["true", "false", "1", "0"], {
+        error: "TRUST_PROXY must be one of: true, false, 1, 0",
+      })
       .optional()
       .transform((val) => val === "true" || val === "1"),
     // Number of trusted reverse proxies in front of the API (1 = one proxy such as Traefik/Nginx;
@@ -56,6 +58,8 @@ export const envSchema = z
       .transform((val) => val === "true" || val === "1"),
     LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
     REFRESH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
+    // Own budget for POST /api/auth/logout (per IP, per minute): it no longer borrows refresh's
+    LOGOUT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
     REGISTER_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
     // Per-IP limits for the recovery endpoints (per hour) and the MFA endpoints (per minute)
     RECOVERY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),

@@ -319,6 +319,7 @@ export class AuthController {
   @Post("logout")
   @Public()
   @HttpCode(200)
+  @RateLimit("logout")
   @ApiOperation({
     summary: "Cierre de sesión (Logout)",
     description:

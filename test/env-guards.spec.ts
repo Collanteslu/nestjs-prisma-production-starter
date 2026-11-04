@@ -147,6 +147,46 @@ describe("env guards (fail-fast configuration)", () => {
     });
   });
 
+  describe("TRUST_PROXY: strict boolean parsing (a typo must not silently disable the proxy posture)", () => {
+    const dev = {
+      NODE_ENV: "development",
+      JWT_SECRET: "dev-secret-0123456789",
+      JWT_REFRESH_SECRET: "dev-refresh-abcdef0123",
+    };
+
+    it("rejects unrecognized values instead of silently trusting nothing", () => {
+      expectRejected({ ...dev, TRUST_PROXY: "yes" }, "TRUST_PROXY", /must be one of/);
+      expectRejected({ ...dev, TRUST_PROXY: "True" }, "TRUST_PROXY", /must be one of/);
+      expectRejected({ ...dev, TRUST_PROXY: "on" }, "TRUST_PROXY", /must be one of/);
+    });
+
+    it("still accepts the documented values: true/1 enable, false/0 disable", () => {
+      expect(parseEnv({ ...dev, TRUST_PROXY: "true" }).TRUST_PROXY).toBe(true);
+      expect(parseEnv({ ...dev, TRUST_PROXY: "1" }).TRUST_PROXY).toBe(true);
+      expect(parseEnv({ ...dev, TRUST_PROXY: "false" }).TRUST_PROXY).toBe(false);
+      expect(parseEnv({ ...dev, TRUST_PROXY: "0" }).TRUST_PROXY).toBe(false);
+    });
+  });
+
+  describe("rate-limit and proxy defaults (review follow-ups)", () => {
+    const dev = {
+      NODE_ENV: "development",
+      JWT_SECRET: "dev-secret-0123456789",
+      JWT_REFRESH_SECRET: "dev-refresh-abcdef0123",
+    };
+
+    it("logout has its own budget: 30/min by default, independent of refresh", () => {
+      expect(parseEnv(dev).LOGOUT_RATE_LIMIT_MAX).toBe(30);
+      expect(parseEnv({ ...dev, LOGOUT_RATE_LIMIT_MAX: "5" }).LOGOUT_RATE_LIMIT_MAX).toBe(5);
+      expect(parseEnv({ ...dev, REFRESH_RATE_LIMIT_MAX: "99" }).LOGOUT_RATE_LIMIT_MAX).toBe(30);
+    });
+
+    it("an unset TRUST_PROXY is off, and padded values are rejected rather than coerced", () => {
+      expect(parseEnv(dev).TRUST_PROXY).toBe(false);
+      expectRejected({ ...dev, TRUST_PROXY: " true" }, "TRUST_PROXY", /must be one of/);
+    });
+  });
+
   describe("regression: pre-existing production guards still hold", () => {
     it("rejects MAIL_TRANSPORT=memory in production", () => {
       expectRejected({ ...production, MAIL_TRANSPORT: "memory" }, "MAIL_TRANSPORT");
