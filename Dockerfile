@@ -5,7 +5,7 @@
 # smoke test de `docker run` (Dependabot propone el bump semanalmente).
 # Node 24 es LTS (Node 25 es una versión impar, sin LTS y con soporte corto) y
 # coincide con `engines.node`, con la CI y con AGENTS.md.
-FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS builder
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS builder
 
 WORKDIR /app
 
@@ -31,7 +31,7 @@ RUN npm run build
 # ==========================================
 # Etapa 2: Imagen Final Ligera para Producción
 # ==========================================
-FROM node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS runner
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS runner
 
 WORKDIR /app
 
